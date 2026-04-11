@@ -91,7 +91,7 @@ if st.button("📥 Gerar Relatório"):
         pdf = FPDF()
         pdf.add_page()
         
-        # Título principal (latin-1 para aceitar acentos)
+        # Título principal
         pdf.set_font("Arial", 'B', 18)
         pdf.set_text_color(34, 139, 34) 
         pdf.cell(190, 15, "Relatório de Recomendação Agronômica".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
@@ -105,7 +105,7 @@ if st.button("📥 Gerar Relatório"):
         pdf.set_text_color(34, 139, 34)
         pdf.cell(100, 10, "Felipe Amorim", ln=True)
         
-        # Área
+        # Área (Largura ajustada para 190 para não vazar)
         pdf.set_fill_color(245, 245, 245)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
@@ -130,14 +130,14 @@ if st.button("📥 Gerar Relatório"):
         pdf.cell(190, 10, "2. Recomendação de Adubação NPK".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
-        # multi_cell ajustada para 180 para não vazar na borda
+        # multi_cell com largura segura (180) para evitar que o texto corte na borda
         pdf.multi_cell(180, 8, f"Detalhamento: {detalhes_pdf}".encode('latin-1', 'replace').decode('latin-1'))
         
         if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
             pdf.set_font("Arial", 'B', 11)
             pdf.cell(180, 10, f"QUANTIDADE: {valor_final_kg:.1f} kg ({sacos_calc} sacos de 50kg)".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
         
-        # Assinatura
+        # Assinatura (Centralizada e sem textos sobrando nas laterais)
         pdf.ln(25)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(190, 10, "________________________________________________", ln=True, align='C')
