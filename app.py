@@ -13,7 +13,7 @@ talhao = st.sidebar.text_input("Talhão/Lote:", "Gleba A1")
 cultura = st.sidebar.selectbox("Cultura Alvo:", ["Soja", "Milho", "Feijão", "Algodão", "Hortaliças", "Outra"])
 
 st.sidebar.markdown("---")
-st.sidebar.write("### 📐 Tamanho da Área Total")
+st.sidebar.write("### 📐 Tamanho da Área")
 tipo_medida = st.sidebar.selectbox("Medir em:", ["Hectares (ha)", "Tarefas (Baianas - 4.356 m²)", "Metros Quadrados (m²)"])
 tamanho_area = st.sidebar.number_input("Quantidade da área:", value=1.0, min_value=0.01)
 
@@ -39,7 +39,7 @@ prnt = st.number_input("PRNT do Calcário (%)", value=80.0, step=1.0)
 nc_ha = ((v2 - v1) * ctc) / prnt if prnt > 0 else 0
 nc_total = nc_ha * area_ha
 
-st.info(f"👉 **Recomendação:** {nc_ha:.2f} t/ha | **Área:** {nc_total:.2f} toneladas")
+st.info(f"👉 **Recomendação:** {nc_ha:.2f} t/ha | **Quantidade p/ área:** {nc_total:.2f} toneladas")
 
 st.markdown("---")
 
@@ -48,7 +48,7 @@ st.header("2. Recomendação de Adubação NPK")
 metodo = st.radio("Como você vai adubar?", ["Usar Adubo Formulado (Ex: 00-20-20)", "Usar Adubos Simples (Ureia, Super, KCl)"])
 
 detalhes_pdf = ""
-valor_total_kg = 0
+valor_final_kg = 0
 sacos_calc = 0
 dose_ha_final = 0
 
@@ -66,12 +66,12 @@ if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     elif nut_base == "Potássio (K)" and f_k > 0: dose_ha_final = (valor_rec / f_k) * 100
 
     if dose_ha_final > 0:
-        valor_total_kg = dose_ha_final * area_ha
-        sacos_calc = int(valor_total_kg/50)+1
-        st.success(f"🚜 **Dose:** {dose_ha_final:.1f} kg/ha | **Área:** {valor_total_kg:.1f} kg ({sacos_calc} sacos)")
-        detalhes_pdf = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha_final:.1f} kg/ha (Quantidade: {valor_total_kg:.1f} kg)"
+        valor_final_kg = dose_ha_final * area_ha
+        sacos_calc = int(valor_final_kg/50)+1
+        st.success(f"🚜 **Dose:** {dose_ha_final:.1f} kg/ha | **Quantidade:** {valor_final_kg:.1f} kg ({sacos_calc} sacos)")
+        detalhes_pdf = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha_final:.1f} kg/ha (Quantidade: {valor_final_kg:.1f} kg)"
     else:
-        st.warning("⚠️ Verifique a fórmula!")
+        st.warning("⚠️ Verifique a fórmula do adubo!")
 else:
     colN, colP, colK = st.columns(3)
     with colN:
@@ -86,15 +86,15 @@ else:
     detalhes_pdf = f"Ureia: {u_total:.1f}kg, Super: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
 
 # --- GERAÇÃO DO PDF ---
-if st.button("Gerar Relatório"):
+if st.button("📥 Gerar Relatório"):
     try:
         pdf = FPDF()
         pdf.add_page()
         
-        # Título
+        # Título principal (latin-1 para aceitar acentos)
         pdf.set_font("Arial", 'B', 18)
         pdf.set_text_color(34, 139, 34) 
-        pdf.cell(190, 15, "Relatorio de Recomendacao Agronomica", ln=True, align='C')
+        pdf.cell(190, 15, "Relatório de Recomendação Agronômica".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
         pdf.ln(5)
         
         # Consultor
@@ -109,49 +109,51 @@ if st.button("Gerar Relatório"):
         pdf.set_fill_color(245, 245, 245)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
-        pdf.cell(190, 10, f"  Talhao: {talhao}  |  Cultura: {cultura}", ln=True, fill=True)
-        pdf.cell(190, 10, f"  Area: {tamanho_area} {tipo_medida}", ln=True, fill=True)
+        pdf.cell(190, 10, f"  Talhão: {talhao}  |  Cultura: {cultura}".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.cell(190, 10, f"  Área: {tamanho_area} {tipo_medida}".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
         pdf.ln(5)
         
-        # Calagem
+        # 1. Calagem
         pdf.set_font("Arial", 'B', 12)
         pdf.set_text_color(34, 139, 34)
-        pdf.cell(190, 10, "1. Recomendacao de Calagem", ln=True)
+        pdf.cell(190, 10, "1. Recomendação de Calagem".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
-        pdf.cell(190, 8, f"Dose por hectare: {nc_ha:.2f} t/ha", ln=True)
+        pdf.cell(190, 8, f"Dose por hectare: {nc_ha:.2f} t/ha".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.set_font("Arial", 'B', 11)
-        pdf.cell(190, 10, f"QUANTIDADE PARA A AREA: {nc_total:.2f} Toneladas", ln=True, fill=True)
+        pdf.cell(190, 10, f"QUANTIDADE PARA A ÁREA: {nc_total:.2f} Toneladas".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
         pdf.ln(5)
         
-        # NPK
+        # 2. NPK
         pdf.set_font("Arial", 'B', 12)
         pdf.set_text_color(34, 139, 34)
-        pdf.cell(190, 10, "2. Recomendacao de Adubacao NPK", ln=True)
+        pdf.cell(190, 10, "2. Recomendação de Adubação NPK".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
-        pdf.multi_cell(190, 8, f"Detalhamento: {detalhes_pdf}")
+        # multi_cell ajustada para 180 para não vazar na borda
+        pdf.multi_cell(180, 8, f"Detalhamento: {detalhes_pdf}".encode('latin-1', 'replace').decode('latin-1'))
         
         if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
             pdf.set_font("Arial", 'B', 11)
-            pdf.cell(190, 10, f"QUANTIDADE: {valor_total_kg:.1f} kg ({sacos_calc} sacos de 50kg)", ln=True, fill=True)
+            pdf.cell(180, 10, f"QUANTIDADE: {valor_final_kg:.1f} kg ({sacos_calc} sacos de 50kg)".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
         
-        # Assinatura com correção: Responsável
+        # Assinatura
         pdf.ln(25)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(190, 10, "________________________________________________", ln=True, align='C')
-        pdf.cell(190, 5, "Felipe Amorim - Consultor Responsavel", ln=True, align='C')
+        pdf.set_font("Arial", 'B', 11)
+        pdf.cell(190, 5, "Felipe Amorim - Responsável Agronômico".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
         
         pdf_output = bytes(pdf.output(dest='S'))
         
         st.download_button(
-            label="📥 Baixar Recomendação",
+            label="Baixar Recomendação",
             data=pdf_output,
             file_name=f"Recomendacao_{talhao}.pdf",
             mime="application/pdf"
         )
     except Exception as e:
-        st.error(f"Erro ao gerar PDF: {e}")
+        st.error(f"Erro ao gerar o documento: {e}")
 
 st.markdown("---")
 st.caption("© 2026 | Felipe Amorim Consultoria")
