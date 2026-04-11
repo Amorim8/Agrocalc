@@ -85,20 +85,10 @@ else:
         k_total = (k_rec / 0.60) * area_ha
     detalhes_pdf = f"Ureia: {u_total:.1f}kg, Super: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
 
-# --- CLASSE PARA O PDF COM MARCA D'ÁGUA ---
-class PDF(FPDF):
-    def header(self):
-        # Marca d'água cinza bem clara
-        self.set_font('Arial', 'B', 40)
-        self.set_text_color(240, 240, 240)
-        # Rotação de 45 graus no centro
-        with self.rotation(45, 105, 148):
-            self.text(35, 190, "FELIPE AMORIM - CONSULTORIA")
-
-# --- BOTÃO E GERAÇÃO DO PDF ---
+# --- GERAÇÃO DO PDF ---
 if st.button("Gerar Relatório"):
     try:
-        pdf = PDF()
+        pdf = FPDF() # Voltamos para o PDF padrão sem marca d'água
         pdf.add_page()
         
         # Título Verde
@@ -107,7 +97,7 @@ if st.button("Gerar Relatório"):
         pdf.cell(190, 15, "Relatorio de Recomendacao Agronomica", ln=True, align='C')
         pdf.ln(5)
         
-        # Consultor em destaque
+        # Consultor
         pdf.set_font("Arial", size=12)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(30, 10, "Consultor:", ln=0)
@@ -115,7 +105,7 @@ if st.button("Gerar Relatório"):
         pdf.set_text_color(34, 139, 34)
         pdf.cell(100, 10, "Felipe Amorim", ln=True)
         
-        # Dados da Área com fundo suave
+        # Dados da Área (Fundo cinza claro)
         pdf.set_fill_color(245, 245, 245)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
@@ -146,7 +136,7 @@ if st.button("Gerar Relatório"):
             pdf.set_font("Arial", 'B', 11)
             pdf.cell(190, 10, f"TOTAL: {total_kg:.1f} kg ({sacos_totais} sacos de 50kg)", ln=True, fill=True)
         
-        # Assinatura centralizada
+        # Assinatura
         pdf.ln(25)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(190, 10, "________________________________________________", ln=True, align='C')
