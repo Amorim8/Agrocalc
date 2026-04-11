@@ -47,7 +47,7 @@ st.markdown("---")
 st.header("2. Recomendação de Adubação NPK")
 metodo = st.radio("Como você vai adubar?", ["Usar Adubo Formulado (Ex: 00-20-20)", "Usar Adubos Simples (Ureia, Super, KCl)"])
 
-detalhes_adubacao = ""
+detalhes_pdf = ""
 
 if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     c1, c2, c3 = st.columns(3)
@@ -55,20 +55,21 @@ if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     with c2: f_p = st.number_input("P (%) no saco", value=20)
     with c3: f_k = st.number_input("K (%) no saco", value=20)
     
-    nutriente_base = st.selectbox("Calcular dose com base em:", ["Nitrogênio (N)", "Fósforo (P)", "Potássio (K)"])
-    valor_rec = st.number_input(f"Recomendação de {nutriente_base} (kg/ha):", value=80.0)
+    nut_base = st.selectbox("Calcular dose com base em:", ["Nitrogênio (N)", "Fósforo (P)", "Potássio (K)"])
+    valor_rec = st.number_input(f"Recomendação de {nut_base} (kg/ha):", value=80.0)
 
     dose_ha = 0
-    if nutriente_base == "Nitrogênio (N)" and f_n > 0: dose_ha = (valor_rec / f_n) * 100
-    elif nutriente_base == "Fósforo (P)" and f_p > 0: dose_ha = (valor_rec / f_p) * 100
-    elif nutriente_base == "Potássio (K)" and f_k > 0: dose_ha = (valor_rec / f_k) * 100
+    # Lógica de segurança para não dividir por zero
+    if nut_base == "Nitrogênio (N)" and f_n > 0: dose_ha = (valor_rec / f_n) * 100
+    elif nut_base == "Fósforo (P)" and f_p > 0: dose_ha = (valor_rec / f_p) * 100
+    elif nut_base == "Potássio (K)" and f_k > 0: dose_ha = (valor_rec / f_k) * 100
 
     if dose_ha > 0:
         total_kg = dose_ha * area_ha
-        st.success(f"🚜 **Dose:** {dose_ha:.1f} kg/ha | **Total Área:** {total_kg:.1f} kg ({int(total_kg/50)+1} sacos)")
-        detalhes_adubacao = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha:.1f} kg/ha (Total: {total_kg:.1f} kg)"
+        st.success(f"🚜 **Dose:** {dose_ha:.1f} kg/ha | **Total Área:** {total_kg:.1f} kg ({int(total_kg/50)+1} sacos de 50kg)")
+        detalhes_pdf = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha:.1f} kg/ha (Total: {total_kg:.1f} kg)"
     else:
-        st.error("⚠️ Verifique a fórmula do adubo!")
+        st.warning(f"⚠️ Atenção: A fórmula escolhida tem 0% de {nut_base}. Mude o nutriente base ou a fórmula.")
 else:
     colN, colP, colK = st.columns(3)
     with colN:
@@ -78,35 +79,47 @@ else:
     with colP:
         p_rec = st.number_input("P2O5 (kg/ha)", value=80.0)
         s_total = (p_rec / 0.18) * area_ha
-        st.write(f"S. Simples total: {s_total:.1f} kg")
+        st.write(f"Super Simples total: {s_total:.1f} kg")
     with colK:
         k_rec = st.number_input("K2O (kg/ha)", value=60.0)
         k_total = (k_rec / 0.60) * area_ha
-        st.write(f"KCl total: {k_total:.1f} kg")
-    detalhes_adubacao = f"Simples - Ureia: {u_total:.1f}kg, Super: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
+        st.write(f"Cloreto (KCl) total: {k_total:.1f} kg")
+    detalhes_pdf = f"Simples - Ureia: {u_total:.1f}kg, Super: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
 
-# --- PDF CORRIGIDO ---
+# --- PDF ROBUSTO ---
 if st.button("🚀 Gerar PDF Profissional"):
     try:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", 'B', 16)
-        pdf.cell(190, 10, "Relatorio de Recomendacao - Felipe Amorim", ln=True, align='C')
+        pdf.cell(190, 10, "Relatorio de Recomendacao Agronomica", ln=True, align='C')
         pdf.ln(10)
         pdf.set_font("Arial", size=12)
+        pdf.cell(190, 10, f"Consultor: Felipe Amorim", ln=True)
         pdf.cell(190, 10, f"Talhao: {talhao} | Cultura: {cultura}", ln=True)
         pdf.cell(190, 10, f"Area Total: {tamanho_area} {tipo_medida}", ln=True)
         pdf.ln(5)
-        pdf.cell(190, 10, f"Calcario Total: {nc_total:.2f} toneladas", ln=True)
-        pdf.multi_cell(190, 10, f"Adubacao Total: {detalhes_adubacao}")
+        pdf.cell(190, 10, f"Calcario Total Necessario: {nc_total:.2f} toneladas", ln=True)
+        pdf.ln(5)
+        pdf.multi_cell(190, 10, f"Adubacao Recomendada: {detalhes_pdf}")
         pdf.ln(20)
         pdf.cell(190, 10, "__________________________________________", ln=True, align='C')
-        pdf.cell(190, 10, "Assinatura do Consultor", ln=True, align='C')
+        pdf.cell(190, 10, "Assinatura do Responsavel", ln=True, align='C')
         
-        pdf_bytes = pdf.output(dest='S') # Removido o .encode() que causava o erro
-        st.download_button(label="📥 Baixar PDF", data=pdf_bytes, file_name=f"Recomendacao_{talhao}.pdf", mime="application/pdf")
+        # O segredo é converter para string primeiro se necessário, mas dest='S' costuma retornar bytes direto
+        pdf_out = pdf.output(dest='S')
+        
+        # Forçar a conversão para bytes caso venha como bytearray ou string
+        final_pdf = bytes(pdf_out)
+        
+        st.download_button(
+            label="📥 Clique para Baixar o Relatório",
+            data=final_pdf,
+            file_name=f"Recomendacao_{talhao}.pdf",
+            mime="application/pdf"
+        )
     except Exception as e:
-        st.error(f"Erro ao gerar PDF: {e}")
+        st.error(f"Houve um problema ao gerar o arquivo: {e}")
 
 st.markdown("---")
 st.caption("© 2026 | Felipe Amorim Consultoria")
