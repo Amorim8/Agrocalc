@@ -21,6 +21,7 @@ with col2: v1 = st.number_input("V1 atual (%)", value=30.0)
 with col3: v2 = st.number_input("V2 desejada (%)", value=70.0)
 with col4: prnt = st.number_input("PRNT (%)", value=80.0)
 
+# Trava para calagem negativa
 calc_nc = ((v2 - v1) * ctc) / prnt if prnt > 0 else 0
 nc_final = max(0.0, calc_nc)
 nc_total = nc_final * area_ha
@@ -48,7 +49,7 @@ with c_dir:
     rp = st.number_input("Meta P", value=80.0, key="p2")
     rk = st.number_input("Meta K", value=60.0, key="k2")
 
-# Lógica da maior dose para não faltar nutriente
+# Cálculo da maior dose
 doses = []
 if fn > 0: doses.append((rn / fn) * 100)
 if fp > 0: doses.append((rp / fp) * 100)
@@ -66,7 +67,7 @@ if dose_ha > 0:
 
 st.divider()
 
-# --- GERADOR DE PDF SIMPLIFICADO ---
+# --- GERADOR DE PDF (CORREÇÃO DE FORMATO BINÁRIO) ---
 if st.button("🚀 Gerar Relatório Final"):
     try:
         pdf = FPDF()
@@ -77,29 +78,31 @@ if st.button("🚀 Gerar Relatório Final"):
         pdf.cell(190, 10, "Consultor: Felipe Amorim", ln=True, align="C")
         
         pdf.ln(10)
-        pdf.cell(190, 10, "DADOS DA AREA: " + nome_area, ln=True)
+        pdf.cell(190, 10, "AREA: " + nome_area, ln=True)
         pdf.cell(190, 10, "TAMANHO: " + str(area_ha) + " Hectares", ln=True)
         
         pdf.ln(5)
+        pdf.set_font("Arial", "B", 12)
         pdf.cell(190, 10, "1. CALAGEM", ln=True)
+        pdf.set_font("Arial", "", 11)
         if nc_final > 0:
             pdf.cell(190, 10, "Dose: " + str(round(nc_final, 2)) + " t/ha", ln=True)
         else:
             pdf.cell(190, 10, "Calagem nao necessaria", ln=True)
             
         pdf.ln(5)
+        pdf.set_font("Arial", "B", 12)
         pdf.cell(190, 10, "2. ADUBACAO NPK", ln=True)
+        pdf.set_font("Arial", "", 11)
         pdf.cell(190, 10, "Dose: " + str(round(dose_ha, 1)) + " kg/ha", ln=True)
-        pdf.cell(190, 10, "Total: " + str(round(total_adubo, 1)) + " kg", ln=True)
+        pdf.cell(190, 10, "Total Area: " + str(round(total_adubo, 1)) + " kg", ln=True)
 
-        # Saída do PDF sem erros de encode
-        pdf_output = pdf.output(dest='S')
-        if isinstance(pdf_output, str):
-            pdf_output = pdf_output.encode('latin-1')
+        # A solução para o erro de 'bytearray': converter para bytes puras
+        pdf_bytes = pdf.output(dest='S').encode('latin-1')
             
         st.download_button(
             label="✅ Baixar PDF",
-            data=pdf_output,
+            data=pdf_bytes,
             file_name="Relatorio_Agro.pdf",
             mime="application/pdf"
         )
