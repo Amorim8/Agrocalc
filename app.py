@@ -39,7 +39,7 @@ prnt = st.number_input("PRNT do Calcário (%)", value=80.0, step=1.0)
 nc_ha = ((v2 - v1) * ctc) / prnt if prnt > 0 else 0
 nc_total = nc_ha * area_ha
 
-st.info(f"👉 **Recomendação:** {nc_ha:.2f} t/ha | **Total para sua área:** {nc_total:.2f} toneladas")
+st.info(f"👉 **Recomendação:** {nc_ha:.2f} t/ha | **Área:** {nc_total:.2f} toneladas")
 
 st.markdown("---")
 
@@ -48,9 +48,9 @@ st.header("2. Recomendação de Adubação NPK")
 metodo = st.radio("Como você vai adubar?", ["Usar Adubo Formulado (Ex: 00-20-20)", "Usar Adubos Simples (Ureia, Super, KCl)"])
 
 detalhes_pdf = ""
-total_kg = 0
-sacos_totais = 0
-dose_ha = 0
+valor_total_kg = 0
+sacos_calc = 0
+dose_ha_final = 0
 
 if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     c1, c2, c3 = st.columns(3)
@@ -61,15 +61,15 @@ if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     nut_base = st.selectbox("Calcular dose com base em:", ["Nitrogênio (N)", "Fósforo (P)", "Potássio (K)"])
     valor_rec = st.number_input(f"Recomendação de {nut_base} (kg/ha):", value=80.0)
 
-    if nut_base == "Nitrogênio (N)" and f_n > 0: dose_ha = (valor_rec / f_n) * 100
-    elif nut_base == "Fósforo (P)" and f_p > 0: dose_ha = (valor_rec / f_p) * 100
-    elif nut_base == "Potássio (K)" and f_k > 0: dose_ha = (valor_rec / f_k) * 100
+    if nut_base == "Nitrogênio (N)" and f_n > 0: dose_ha_final = (valor_rec / f_n) * 100
+    elif nut_base == "Fósforo (P)" and f_p > 0: dose_ha_final = (valor_rec / f_p) * 100
+    elif nut_base == "Potássio (K)" and f_k > 0: dose_ha_final = (valor_rec / f_k) * 100
 
-    if dose_ha > 0:
-        total_kg = dose_ha * area_ha
-        sacos_totais = int(total_kg/50)+1
-        st.success(f"🚜 **Dose:** {dose_ha:.1f} kg/ha | **Total Área:** {total_kg:.1f} kg ({sacos_totais} sacos)")
-        detalhes_pdf = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha:.1f} kg/ha (Total: {total_kg:.1f} kg)"
+    if dose_ha_final > 0:
+        valor_total_kg = dose_ha_final * area_ha
+        sacos_calc = int(valor_total_kg/50)+1
+        st.success(f"🚜 **Dose:** {dose_ha_final:.1f} kg/ha | **Área:** {valor_total_kg:.1f} kg ({sacos_calc} sacos)")
+        detalhes_pdf = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha_final:.1f} kg/ha (Quantidade: {valor_total_kg:.1f} kg)"
     else:
         st.warning("⚠️ Verifique a fórmula!")
 else:
@@ -88,10 +88,10 @@ else:
 # --- GERAÇÃO DO PDF ---
 if st.button("Gerar Relatório"):
     try:
-        pdf = FPDF() # Voltamos para o PDF padrão sem marca d'água
+        pdf = FPDF()
         pdf.add_page()
         
-        # Título Verde
+        # Título
         pdf.set_font("Arial", 'B', 18)
         pdf.set_text_color(34, 139, 34) 
         pdf.cell(190, 15, "Relatorio de Recomendacao Agronomica", ln=True, align='C')
@@ -105,12 +105,12 @@ if st.button("Gerar Relatório"):
         pdf.set_text_color(34, 139, 34)
         pdf.cell(100, 10, "Felipe Amorim", ln=True)
         
-        # Dados da Área (Fundo cinza claro)
+        # Área
         pdf.set_fill_color(245, 245, 245)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(190, 10, f"  Talhao: {talhao}  |  Cultura: {cultura}", ln=True, fill=True)
-        pdf.cell(190, 10, f"  Area: {tamanho_area} {tipo_medida} ({area_ha:.2f} ha)", ln=True, fill=True)
+        pdf.cell(190, 10, f"  Area: {tamanho_area} {tipo_medida}", ln=True, fill=True)
         pdf.ln(5)
         
         # Calagem
@@ -119,9 +119,9 @@ if st.button("Gerar Relatório"):
         pdf.cell(190, 10, "1. Recomendacao de Calagem", ln=True)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
-        pdf.cell(190, 8, f"Necessidade por hectare: {nc_ha:.2f} t/ha", ln=True)
+        pdf.cell(190, 8, f"Dose por hectare: {nc_ha:.2f} t/ha", ln=True)
         pdf.set_font("Arial", 'B', 11)
-        pdf.cell(190, 10, f"TOTAL PARA A AREA: {nc_total:.2f} Toneladas", ln=True, fill=True)
+        pdf.cell(190, 10, f"QUANTIDADE PARA A AREA: {nc_total:.2f} Toneladas", ln=True, fill=True)
         pdf.ln(5)
         
         # NPK
@@ -134,9 +134,9 @@ if st.button("Gerar Relatório"):
         
         if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
             pdf.set_font("Arial", 'B', 11)
-            pdf.cell(190, 10, f"TOTAL: {total_kg:.1f} kg ({sacos_totais} sacos de 50kg)", ln=True, fill=True)
+            pdf.cell(190, 10, f"QUANTIDADE: {valor_total_kg:.1f} kg ({sacos_calc} sacos de 50kg)", ln=True, fill=True)
         
-        # Assinatura
+        # Assinatura com correção: Responsável
         pdf.ln(25)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(190, 10, "________________________________________________", ln=True, align='C')
