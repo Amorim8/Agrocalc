@@ -17,7 +17,6 @@ st.sidebar.write("### 📐 Tamanho da Área")
 tipo_medida = st.sidebar.selectbox("Medir em:", ["Hectares (ha)", "Tarefas (Baianas - 4.356 m²)", "Metros Quadrados (m²)"])
 tamanho_area = st.sidebar.number_input("Quantidade da área:", value=1.0, min_value=0.01)
 
-# Conversão interna para Hectare
 if tipo_medida == "Tarefas (Baianas - 4.356 m²)":
     area_ha = (tamanho_area * 4356) / 10000
 elif tipo_medida == "Metros Quadrados (m²)":
@@ -70,8 +69,6 @@ if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
         sacos_calc = int(valor_final_kg/50)+1
         st.success(f"🚜 **Dose:** {dose_ha_final:.1f} kg/ha | **Quantidade:** {valor_final_kg:.1f} kg ({sacos_calc} sacos)")
         detalhes_pdf = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha_final:.1f} kg/ha (Quantidade: {valor_final_kg:.1f} kg)"
-    else:
-        st.warning("⚠️ Verifique a fórmula do adubo!")
 else:
     colN, colP, colK = st.columns(3)
     with colN:
@@ -86,70 +83,28 @@ else:
     detalhes_pdf = f"Ureia: {u_total:.1f}kg, Super: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
 
 # --- GERAÇÃO DO PDF ---
-if st.button("📥 Gerar Relatório"):
+if st.button("📥 Gerar Relatório Profissional"):
     try:
         pdf = FPDF()
         pdf.add_page()
         
-        # Título principal
-        pdf.set_font("Arial", 'B', 18)
-        pdf.set_text_color(34, 139, 34) 
-        pdf.cell(190, 15, "Relatório de Recomendação Agronômica".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
-        pdf.ln(5)
+        # --- CABEÇALHO COM FUNDO VERDE ---
+        pdf.set_fill_color(34, 139, 34) # Verde Floresta
+        pdf.rect(0, 0, 210, 40, 'F')    # Faixa verde no topo
         
-        # Identificação
+        pdf.set_y(15)
+        pdf.set_font("Arial", 'B', 24)
+        pdf.set_text_color(255, 255, 255) # Texto Branco sobre o verde
+        pdf.cell(190, 10, "RELATÓRIO DE CONSULTORIA".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+        
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(190, 10, "Felipe Amorim".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+        pdf.ln(15)
+        
+        # --- INFO DA ÁREA ---
+        pdf.set_fill_color(240, 240, 240) # Cinza claro
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(190, 10, f"  DADOS DO TALHÃO E CULTURA".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
         pdf.set_font("Arial", size=12)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(30, 10, "Consultor:", ln=0)
-        pdf.set_font("Arial", 'B', 14)
-        pdf.set_text_color(34, 139, 34)
-        pdf.cell(100, 10, "Felipe Amorim", ln=True)
-        
-        # Dados da Área (Margem segura de 190)
-        pdf.set_fill_color(245, 245, 245)
-        pdf.set_font("Arial", size=11)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(190, 10, f"  Talhão: {talhao}  |  Cultura: {cultura}".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
-        pdf.cell(190, 10, f"  Área: {tamanho_area} {tipo_medida}".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
-        pdf.ln(5)
-        
-        # 1. Calagem
-        pdf.set_font("Arial", 'B', 12)
-        pdf.set_text_color(34, 139, 34)
-        pdf.cell(190, 10, "1. Recomendação de Calagem".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-        pdf.set_font("Arial", size=11)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(190, 8, f"Dose por hectare: {nc_ha:.2f} t/ha".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-        pdf.set_font("Arial", 'B', 11)
-        pdf.cell(190, 10, f"QUANTIDADE PARA A ÁREA: {nc_total:.2f} Toneladas".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
-        pdf.ln(5)
-        
-        # 2. NPK
-        pdf.set_font("Arial", 'B', 12)
-        pdf.set_text_color(34, 139, 34)
-        pdf.cell(190, 10, "2. Recomendação de Adubação NPK".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-        pdf.set_font("Arial", size=11)
-        pdf.set_text_color(0, 0, 0)
-        
-        # multi_cell largura 185 para garantir que nada corte na borda
-        pdf.multi_cell(185, 8, f"Detalhamento: {detalhes_pdf}".encode('latin-1', 'replace').decode('latin-1'))
-        
-        if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
-            pdf.set_font("Arial", 'B', 11)
-            pdf.cell(185, 10, f"QUANTIDADE: {valor_final_kg:.1f} kg ({sacos_calc} sacos de 50kg)".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
-        
-        # --- A ASSINATURA FOI REMOVIDA DAQUI ---
-
-        pdf_output = bytes(pdf.output(dest='S'))
-        
-        st.download_button(
-            label="Baixar Recomendação",
-            data=pdf_output,
-            file_name=f"Recomendacao_{talhao}.pdf",
-            mime="application/pdf"
-        )
-    except Exception as e:
-        st.error(f"Erro ao gerar o documento: {e}")
-
-st.markdown("---")
-st.caption("© 2026 | Felipe Amorim Consultoria")
+        pdf.cell(190, 10, f"  Talhão: {
