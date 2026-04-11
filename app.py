@@ -48,8 +48,8 @@ st.header("2. Recomendação de Adubação NPK")
 metodo = st.radio("Como você vai adubar?", ["Usar Adubo Formulado (Ex: 00-20-20)", "Usar Adubos Simples (Ureia, Super, KCl)"])
 
 detalhes_pdf = ""
-sacos_totais = 0
 total_kg = 0
+sacos_totais = 0
 dose_ha = 0
 
 if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
@@ -83,31 +83,31 @@ else:
     with colK:
         k_rec = st.number_input("K2O (kg/ha)", value=60.0)
         k_total = (k_rec / 0.60) * area_ha
-    detalhes_pdf = f"Ureia: {u_total:.1f}kg, S.Simples: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
+    detalhes_pdf = f"Ureia: {u_total:.1f}kg, Super: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
 
-# --- CLASSE CUSTOMIZADA PARA MARCA D'ÁGUA ---
+# --- CLASSE PARA O PDF COM MARCA D'ÁGUA ---
 class PDF(FPDF):
     def header(self):
-        # Configurar Marca d'Água (Cinza muito claro)
-        self.set_font('Arial', 'B', 50)
+        # Marca d'água cinza bem clara
+        self.set_font('Arial', 'B', 40)
         self.set_text_color(240, 240, 240)
-        # Posicionar no centro da página com rotação de 45 graus
+        # Rotação de 45 graus no centro
         with self.rotation(45, 105, 148):
-            self.text(40, 190, "FELIPE AMORIM")
+            self.text(35, 190, "FELIPE AMORIM - CONSULTORIA")
 
-# --- GERAR PDF ---
-if st.button("Gerar PDF Profissional"):
+# --- BOTÃO E GERAÇÃO DO PDF ---
+if st.button("Gerar Relatório"):
     try:
-        pdf = PDF() # Usando a classe com marca d'água
+        pdf = PDF()
         pdf.add_page()
         
-        # Título
+        # Título Verde
         pdf.set_font("Arial", 'B', 18)
         pdf.set_text_color(34, 139, 34) 
         pdf.cell(190, 15, "Relatorio de Recomendacao Agronomica", ln=True, align='C')
         pdf.ln(5)
         
-        # Consultor
+        # Consultor em destaque
         pdf.set_font("Arial", size=12)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(30, 10, "Consultor:", ln=0)
@@ -115,7 +115,7 @@ if st.button("Gerar PDF Profissional"):
         pdf.set_text_color(34, 139, 34)
         pdf.cell(100, 10, "Felipe Amorim", ln=True)
         
-        # Dados Gerais (Fundo cinza claro)
+        # Dados da Área com fundo suave
         pdf.set_fill_color(245, 245, 245)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
@@ -123,12 +123,45 @@ if st.button("Gerar PDF Profissional"):
         pdf.cell(190, 10, f"  Area: {tamanho_area} {tipo_medida} ({area_ha:.2f} ha)", ln=True, fill=True)
         pdf.ln(5)
         
-        # Resultados
+        # Calagem
         pdf.set_font("Arial", 'B', 12)
         pdf.set_text_color(34, 139, 34)
         pdf.cell(190, 10, "1. Recomendacao de Calagem", ln=True)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
-        pdf.cell(190, 8, f"Dose por Hectare: {nc_ha:.2f} t/ha", ln=True)
+        pdf.cell(190, 8, f"Necessidade por hectare: {nc_ha:.2f} t/ha", ln=True)
         pdf.set_font("Arial", 'B', 11)
-        pdf.cell(190
+        pdf.cell(190, 10, f"TOTAL PARA A AREA: {nc_total:.2f} Toneladas", ln=True, fill=True)
+        pdf.ln(5)
+        
+        # NPK
+        pdf.set_font("Arial", 'B', 12)
+        pdf.set_text_color(34, 139, 34)
+        pdf.cell(190, 10, "2. Recomendacao de Adubacao NPK", ln=True)
+        pdf.set_font("Arial", size=11)
+        pdf.set_text_color(0, 0, 0)
+        pdf.multi_cell(190, 8, f"Detalhamento: {detalhes_pdf}")
+        
+        if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
+            pdf.set_font("Arial", 'B', 11)
+            pdf.cell(190, 10, f"TOTAL: {total_kg:.1f} kg ({sacos_totais} sacos de 50kg)", ln=True, fill=True)
+        
+        # Assinatura centralizada
+        pdf.ln(25)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(190, 10, "________________________________________________", ln=True, align='C')
+        pdf.cell(190, 5, "Felipe Amorim - Consultor Responsavel", ln=True, align='C')
+        
+        pdf_output = bytes(pdf.output(dest='S'))
+        
+        st.download_button(
+            label="📥 Baixar Recomendação",
+            data=pdf_output,
+            file_name=f"Recomendacao_{talhao}.pdf",
+            mime="application/pdf"
+        )
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {e}")
+
+st.markdown("---")
+st.caption("© 2026 | Felipe Amorim Consultoria")
