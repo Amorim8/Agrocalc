@@ -49,6 +49,8 @@ metodo = st.radio("Como você vai adubar?", ["Usar Adubo Formulado (Ex: 00-20-20
 
 detalhes_pdf = ""
 sacos_totais = 0
+total_kg = 0
+dose_ha = 0
 
 if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     c1, c2, c3 = st.columns(3)
@@ -59,7 +61,6 @@ if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     nut_base = st.selectbox("Calcular dose com base em:", ["Nitrogênio (N)", "Fósforo (P)", "Potássio (K)"])
     valor_rec = st.number_input(f"Recomendação de {nut_base} (kg/ha):", value=80.0)
 
-    dose_ha = 0
     if nut_base == "Nitrogênio (N)" and f_n > 0: dose_ha = (valor_rec / f_n) * 100
     elif nut_base == "Fósforo (P)" and f_p > 0: dose_ha = (valor_rec / f_p) * 100
     elif nut_base == "Potássio (K)" and f_k > 0: dose_ha = (valor_rec / f_k) * 100
@@ -67,135 +68,67 @@ if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     if dose_ha > 0:
         total_kg = dose_ha * area_ha
         sacos_totais = int(total_kg/50)+1
-        st.success(f"🚜 **Dose:** {dose_ha:.1f} kg/ha | **Total Área:** {total_kg:.1f} kg ({sacos_totais} sacos de 50kg)")
-        detalhes_pdf = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha:.1f} kg/ha. Total para area: {total_kg:.1f} kg ({sacos_totais} sacos)."
+        st.success(f"🚜 **Dose:** {dose_ha:.1f} kg/ha | **Total Área:** {total_kg:.1f} kg ({sacos_totais} sacos)")
+        detalhes_pdf = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha:.1f} kg/ha (Total: {total_kg:.1f} kg)"
     else:
-        st.warning(f"⚠️ Atenção: A fórmula escolhida tem 0% de {nut_base}. Mude o nutriente base ou a fórmula.")
+        st.warning("⚠️ Verifique a fórmula!")
 else:
     colN, colP, colK = st.columns(3)
     with colN:
         n_rec = st.number_input("N (kg/ha)", value=0.0)
         u_total = (n_rec / 0.45) * area_ha
-        st.write(f"Ureia total: {u_total:.1f} kg")
     with colP:
         p_rec = st.number_input("P2O5 (kg/ha)", value=80.0)
         s_total = (p_rec / 0.18) * area_ha
-        st.write(f"Super Simples total: {s_total:.1f} kg")
     with colK:
         k_rec = st.number_input("K2O (kg/ha)", value=60.0)
         k_total = (k_rec / 0.60) * area_ha
-        st.write(f"Cloreto (KCl) total: {k_total:.1f} kg")
-    detalhes_pdf = f"Simples - Ureia: {u_total:.1f}kg, Super: {s_total:.1f}kg, KCl: {k_total:.1f}kg (Totais p/ area)"
+    detalhes_pdf = f"Ureia: {u_total:.1f}kg, S.Simples: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
 
-# --- PDF ROBUSTO E PROFISSIONAL ---
-if st.button("🚀 Gerar PDF Profissional e Colorido"):
+# --- CLASSE CUSTOMIZADA PARA MARCA D'ÁGUA ---
+class PDF(FPDF):
+    def header(self):
+        # Configurar Marca d'Água (Cinza muito claro)
+        self.set_font('Arial', 'B', 50)
+        self.set_text_color(240, 240, 240)
+        # Posicionar no centro da página com rotação de 45 graus
+        with self.rotation(45, 105, 148):
+            self.text(40, 190, "FELIPE AMORIM")
+
+# --- GERAR PDF ---
+if st.button("Gerar PDF Profissional"):
     try:
-        # Função para corrigir acentuação (substitui caracteres especiais)
-        def sem_acento(texto):
-            replacements = {
-                'ã': 'a', 'ã': 'a', 'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a',
-                'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
-                'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
-                'ó': 'o', 'ò': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o',
-                'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
-                'ç': 'c',
-                'Ã': 'A', 'Á': 'A', 'À': 'A', 'Â': 'A', 'Ä': 'A',
-                'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
-                'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
-                'Ó': 'O', 'Ò': 'O', 'Ô': 'O', 'Ö': 'O', 'Õ': 'O',
-                'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
-                'Ç': 'C'
-            }
-            # FPDF nativo não suporta UTF-8 sem configurar fonte, vamos converter para garantir
-            # Para entregar com acento real, precisaríamos configurar uma fonte TrueType (.ttf) que suportasse
-            # Vamos manter a conversão por segurança, ou você pode carregar uma fonte customizada.
-            return texto # Tentei manter o acento, vamos ver se a biblioteca nativa suporta no Streamlit Cloud
-
-        pdf = FPDF()
+        pdf = PDF() # Usando a classe com marca d'água
         pdf.add_page()
         
-        # --- CABEÇALHO ---
-        # Adicionar uma imagem/logo opcional (se você tiver uma, me avisa que te ensino a colocar)
-        # pdf.image('logo_agro.png', 10, 8, 33) 
-        
+        # Título
         pdf.set_font("Arial", 'B', 18)
-        # Usar uma cor verde para o título (R, G, B) - (34, 139, 34) é Forest Green
         pdf.set_text_color(34, 139, 34) 
-        pdf.cell(190, 10, sem_acento("Relatório de Recomendação Agronômica"), ln=True, align='C')
+        pdf.cell(190, 15, "Relatorio de Recomendacao Agronomica", ln=True, align='C')
         pdf.ln(5)
         
-        # --- DADOS DO CONSULTOR ---
+        # Consultor
         pdf.set_font("Arial", size=12)
-        pdf.set_text_color(0, 0, 0) # Voltar para preto
+        pdf.set_text_color(0, 0, 0)
         pdf.cell(30, 10, "Consultor:", ln=0)
         pdf.set_font("Arial", 'B', 14)
-        # Usar verde para o nome em destaque
         pdf.set_text_color(34, 139, 34)
-        pdf.cell(100, 10, sem_acento("Felipe Amorim"), ln=True)
+        pdf.cell(100, 10, "Felipe Amorim", ln=True)
         
-        # --- DADOS DA ÁREA ---
-        pdf.set_font("Arial", size=11)
-        pdf.set_text_color(0, 0, 0) # Preto
-        pdf.cell(190, 8, f"Talhao/Lote: {sem_acento(talhao)} | Cultura: {sem_acento(cultura)}", ln=True)
-        pdf.cell(190, 8, f"Area Total: {tamanho_area} {tipo_medida} ({area_ha:.2f} ha reais)", ln=True)
-        pdf.ln(5)
-        
-        # --- RESULTADOS: CALAGEM ---
-        pdf.set_font("Arial", 'B', 12)
-        pdf.set_text_color(34, 139, 34) # Verde Forest
-        pdf.cell(190, 10, sem_acento("1. Recomendação de Calagem"), ln=True)
+        # Dados Gerais (Fundo cinza claro)
+        pdf.set_fill_color(245, 245, 245)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
-        pdf.cell(190, 8, f"Necessidade por Hectare: {nc_ha:.2f} t/ha", ln=True)
+        pdf.cell(190, 10, f"  Talhao: {talhao}  |  Cultura: {cultura}", ln=True, fill=True)
+        pdf.cell(190, 10, f"  Area: {tamanho_area} {tipo_medida} ({area_ha:.2f} ha)", ln=True, fill=True)
+        pdf.ln(5)
+        
+        # Resultados
+        pdf.set_font("Arial", 'B', 12)
+        pdf.set_text_color(34, 139, 34)
+        pdf.cell(190, 10, "1. Recomendacao de Calagem", ln=True)
+        pdf.set_font("Arial", size=11)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(190, 8, f"Dose por Hectare: {nc_ha:.2f} t/ha", ln=True)
         pdf.set_font("Arial", 'B', 11)
-        # Destacar o total para a área
-        pdf.cell(50, 8, sem_acento("Total para sua Área:"), ln=0)
-        pdf.set_text_color(34, 139, 34)
-        pdf.cell(100, 8, f"{nc_total:.2f} toneladas", ln=True)
-        pdf.ln(5)
-        
-        # --- RESULTADOS: ADUBAÇÃO ---
-        pdf.set_font("Arial", 'B', 12)
-        pdf.set_text_color(34, 139, 34) # Verde Forest
-        pdf.cell(190, 10, sem_acento("2. Recomendação de Adubação NPK"), ln=True)
-        pdf.set_font("Arial", size=11)
-        pdf.set_text_color(0, 0, 0)
-        if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
-            pdf.cell(190, 8, f"Adubo Formulado {f_n}-{f_p}-{f_k}: {dose_ha:.1f} kg/ha", ln=True)
-            pdf.ln(2)
-            pdf.set_font("Arial", 'B', 11)
-            # Destacar o total e sacos
-            pdf.cell(50, 8, sem_acento("Total p/ sua Área:"), ln=0)
-            pdf.set_text_color(34, 139, 34)
-            pdf.cell(100, 8, f"{total_kg:.1f} kg", ln=True)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(50, 8, sem_acento("Quantidade de Sacos:"), ln=0)
-            pdf.set_text_color(34, 139, 34)
-            pdf.cell(100, 8, f"{sacos_totais} sacos de 50kg", ln=True)
-        else:
-            pdf.multi_cell(190, 8, sem_acento(f"Adubos Simples (Totais para area): {detalhes_pdf}"))
-        
-        # --- ASSINATURA ---
-        pdf.ln(25)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(190, 10, "________________________________________________", ln=True, align='C')
-        pdf.set_font("Arial", size=10)
-        pdf.cell(190, 5, sem_acento("Assinatura do Consultor Responsável"), ln=True, align='C')
-        pdf.set_font("Arial", size=12)
-        pdf.cell(190, 5, sem_acento("Felipe Amorim"), ln=True, align='C')
-        
-        # Geração Robusta de PDF (Consertado o bug anterior)
-        pdf_out = pdf.output(dest='S')
-        final_pdf = bytes(pdf_out)
-        
-        st.download_button(
-            label="📥 Baixar seu Relatório Profissional e Colorido",
-            data=final_pdf,
-            file_name=f"Relatorio_{talhao}_{sem_acento(cultura)}.pdf",
-            mime="application/pdf"
-        )
-    except Exception as e:
-        st.error(f"Houve um problema ao gerar o relatório: {e}")
-
-st.markdown("---")
-st.caption("© 2026 | Felipe Amorim Consultoria")
+        pdf.cell(190
