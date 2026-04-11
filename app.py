@@ -36,45 +36,40 @@ with col3:
     v2 = st.number_input("Saturação desejada (V2 %)", value=70.0, step=1.0)
 
 prnt = st.number_input("PRNT do Calcário (%)", value=80.0, step=1.0)
-nc_ha = ((v2 - v1) * ctc) / prnt
+nc_ha = ((v2 - v1) * ctc) / prnt if prnt > 0 else 0
 nc_total = nc_ha * area_ha
 
-st.info(f"👉 **Recomendação:** {nc_ha:.2f} t/ha | **Total para sua área ({tamanho_area} {tipo_medida}):** {nc_total:.2f} toneladas")
+st.info(f"👉 **Recomendação:** {nc_ha:.2f} t/ha | **Total para sua área:** {nc_total:.2f} toneladas")
 
 st.markdown("---")
 
-# --- 2. ADUBAÇÃO NPK (SIMPLES OU FORMULADO) ---
+# --- 2. ADUBAÇÃO NPK ---
 st.header("2. Recomendação de Adubação NPK")
-
 metodo = st.radio("Como você vai adubar?", ["Usar Adubo Formulado (Ex: 00-20-20)", "Usar Adubos Simples (Ureia, Super, KCl)"])
 
+dose_final_texto = ""
+
 if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
-    st.write("### Configuração do Adubo")
     c1, c2, c3 = st.columns(3)
     with c1: f_n = st.number_input("N (%) no saco", value=0)
     with c2: f_p = st.number_input("P (%) no saco", value=20)
     with c3: f_k = st.number_input("K (%) no saco", value=20)
     
-    st.write("### Qual nutriente manda no cálculo?")
     nutriente_base = st.selectbox("Calcular dose com base em:", ["Nitrogênio (N)", "Fósforo (P)", "Potássio (K)"])
-    valor_rec = st.number_input(f"Quantidade recomendada de {nutriente_base} (kg/ha):", value=80.0)
+    valor_rec = st.number_input(f"Recomendação de {nutriente_base} (kg/ha):", value=80.0)
 
-    # Lógica de cálculo para formulado
     dose_ha = 0
     if nutriente_base == "Nitrogênio (N)" and f_n > 0: dose_ha = (valor_rec / f_n) * 100
     elif nutriente_base == "Fósforo (P)" and f_p > 0: dose_ha = (valor_rec / f_p) * 100
     elif nutriente_base == "Potássio (K)" and f_k > 0: dose_ha = (valor_rec / f_k) * 100
 
     if dose_ha > 0:
-        dose_total_kg = dose_ha * area_ha
-        st.success(f"🚜 **Dose por Hectare:** {dose_ha:.1f} kg/ha")
-        st.metric(f"Total para {tamanho_area} {tipo_medida}", f"{dose_total_kg:.1f} kg")
-        st.write(f"📦 **Quantidade de sacos (50kg):** {int(dose_total_kg/50) + 1} sacos")
+        total_kg = dose_ha * area_ha
+        st.success(f"🚜 **Dose:** {dose_ha:.1f} kg/ha | **Total Área:** {total_kg:.1f} kg ({int(total_kg/50)+1} sacos)")
+        dose_final_texto = f"{dose_ha:.1f} kg/ha do formulado {f_n}-{f_p}-{f_k}"
     else:
-        st.error("⚠️ O nutriente escolhido está com 0% na fórmula!")
-
+        st.error("⚠️ Verifique a fórmula!")
 else:
-    st.write("### Recomendação para Adubos Simples")
     colN, colP, colK = st.columns(3)
     with colN:
         n_rec = st.number_input("N (kg/ha)", value=0.0)
@@ -88,25 +83,31 @@ else:
         k_rec = st.number_input("K2O (kg/ha)", value=60.0)
         k_total = (k_rec / 0.60) * area_ha
         st.write(f"KCl total: {k_total:.1f} kg")
+    dose_final_texto = "Mistura de adubos simples"
 
-# --- PDF ---
+# --- CONSERTO DO PDF ---
 if st.button("🚀 Gerar PDF Profissional"):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, "Relatorio de Recomendacao Agronomica", ln=True, align='C')
-    pdf.set_font("Arial", size=12)
-    pdf.ln(10)
-    pdf.cell(200, 10, f"Consultor: Felipe Amorim", ln=True)
-    pdf.cell(200, 10, f"Area: {tamanho_area} {tipo_medida}", ln=True)
-    pdf.cell(200, 10, f"Cultura: {cultura}", ln=True)
-    pdf.ln(5)
-    pdf.cell(200, 10, f"Calcario Total: {nc_total:.2f} toneladas", ln=True)
-    pdf.ln(10)
-    pdf.cell(200, 10, "Assinatura: _________________________________", ln=True)
-    
-    pdf_output = pdf.output(dest="S").encode("latin-1")
-    st.download_button(label="📥 Baixar PDF", data=pdf_output, file_name=f"Recomendacao_{talhao}.pdf", mime="application/pdf")
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(190, 10, "Relatorio Agronomico - Felipe Amorim", ln=True, align='C')
+        pdf.set_font("Arial", size=12)
+        pdf.ln(10)
+        pdf.cell(190, 10, f"Talhao: {talhao} | Cultura: {cultura}", ln=True)
+        pdf.cell(190, 10, f"Area Total: {tamanho_area} {tipo_medida}", ln=True)
+        pdf.ln(5)
+        pdf.cell(190, 10, f"Calcario: {nc_total:.2f} toneladas no total", ln=True)
+        pdf.cell(190, 10, f"Adubacao: {dose_final_texto}", ln=True)
+        pdf.ln(20)
+        pdf.cell(190, 10, "__________________________________________", ln=True, align='C')
+        pdf.cell(190, 10, "Assinatura do Consultor", ln=True, align='C')
+        
+        # Forma correta de gerar o download no Streamlit Cloud
+        pdf_bytes = pdf.output(dest='S').encode('latin-1')
+        st.download_button(label="📥 Baixar Relatório", data=pdf_bytes, file_name=f"Relatorio_{talhao}.pdf", mime="application/pdf")
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {e}")
 
 st.markdown("---")
-st.caption("© 2026 | Sistema de Consultoria Felipe Amorim")
+st.caption("© 2026 | Felipe Amorim Consultoria")
