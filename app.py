@@ -47,7 +47,7 @@ st.markdown("---")
 st.header("2. Recomendação de Adubação NPK")
 metodo = st.radio("Como você vai adubar?", ["Usar Adubo Formulado (Ex: 00-20-20)", "Usar Adubos Simples (Ureia, Super, KCl)"])
 
-dose_final_texto = ""
+detalhes_adubacao = ""
 
 if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     c1, c2, c3 = st.columns(3)
@@ -66,9 +66,9 @@ if metodo == "Usar Adubo Formulado (Ex: 00-20-20)":
     if dose_ha > 0:
         total_kg = dose_ha * area_ha
         st.success(f"🚜 **Dose:** {dose_ha:.1f} kg/ha | **Total Área:** {total_kg:.1f} kg ({int(total_kg/50)+1} sacos)")
-        dose_final_texto = f"{dose_ha:.1f} kg/ha do formulado {f_n}-{f_p}-{f_k}"
+        detalhes_adubacao = f"Adubo {f_n}-{f_p}-{f_k}: {dose_ha:.1f} kg/ha (Total: {total_kg:.1f} kg)"
     else:
-        st.error("⚠️ Verifique a fórmula!")
+        st.error("⚠️ Verifique a fórmula do adubo!")
 else:
     colN, colP, colK = st.columns(3)
     with colN:
@@ -83,29 +83,28 @@ else:
         k_rec = st.number_input("K2O (kg/ha)", value=60.0)
         k_total = (k_rec / 0.60) * area_ha
         st.write(f"KCl total: {k_total:.1f} kg")
-    dose_final_texto = "Mistura de adubos simples"
+    detalhes_adubacao = f"Simples - Ureia: {u_total:.1f}kg, Super: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
 
-# --- CONSERTO DO PDF ---
+# --- PDF CORRIGIDO ---
 if st.button("🚀 Gerar PDF Profissional"):
     try:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", 'B', 16)
-        pdf.cell(190, 10, "Relatorio Agronomico - Felipe Amorim", ln=True, align='C')
-        pdf.set_font("Arial", size=12)
+        pdf.cell(190, 10, "Relatorio de Recomendacao - Felipe Amorim", ln=True, align='C')
         pdf.ln(10)
+        pdf.set_font("Arial", size=12)
         pdf.cell(190, 10, f"Talhao: {talhao} | Cultura: {cultura}", ln=True)
         pdf.cell(190, 10, f"Area Total: {tamanho_area} {tipo_medida}", ln=True)
         pdf.ln(5)
-        pdf.cell(190, 10, f"Calcario: {nc_total:.2f} toneladas no total", ln=True)
-        pdf.cell(190, 10, f"Adubacao: {dose_final_texto}", ln=True)
+        pdf.cell(190, 10, f"Calcario Total: {nc_total:.2f} toneladas", ln=True)
+        pdf.multi_cell(190, 10, f"Adubacao Total: {detalhes_adubacao}")
         pdf.ln(20)
         pdf.cell(190, 10, "__________________________________________", ln=True, align='C')
         pdf.cell(190, 10, "Assinatura do Consultor", ln=True, align='C')
         
-        # Forma correta de gerar o download no Streamlit Cloud
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        st.download_button(label="📥 Baixar Relatório", data=pdf_bytes, file_name=f"Relatorio_{talhao}.pdf", mime="application/pdf")
+        pdf_bytes = pdf.output(dest='S') # Removido o .encode() que causava o erro
+        st.download_button(label="📥 Baixar PDF", data=pdf_bytes, file_name=f"Recomendacao_{talhao}.pdf", mime="application/pdf")
     except Exception as e:
         st.error(f"Erro ao gerar PDF: {e}")
 
