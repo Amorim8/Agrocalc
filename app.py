@@ -1,69 +1,83 @@
 import streamlit as st
 from fpdf import FPDF
 
-# Configuração da Página - Felipe Amorim
-st.set_page_config(page_title="AgroCalc", layout="wide")
+# Configuração da Página
+st.set_page_config(page_title="AgroCalc - Felipe Amorim", layout="wide")
 
 st.title("🌿 Sistema de Consultoria Agronômica")
 st.subheader("Consultor: Felipe Amorim")
 
 # --- SIDEBAR: CONFIGURAÇÃO DA ÁREA ---
-st.sidebar.header("📋 Configuração da Área") 
-nome_area = st.sidebar.text_input("Nome da Área:", "Área Soja 01")
-area_ha = st.sidebar.number_input("Tamanho (Hectares):", value=1.0, min_value=0.01)
+st.sidebar.header("📋 Configuração da Gleba")
+talhao = st.sidebar.text_input("Identificação do Talhão:", "Área Soja 01")
+area_ha = st.sidebar.number_input("Tamanho da Área (Hectares):", value=1.0, min_value=0.01)
 
-# --- 1. RECOMENDAÇÃO DE CALAGEM ---
+# --- 1. PROCESSO DE CALAGEM ---
 st.header("1. Recomendação de Calagem")
-c1, c2, c3, c4 = st.columns(4)
+st.write("Insira os dados da análise de solo para calcular a necessidade de calcário.")
 
-with c1: ctc = st.number_input("CTC", value=13.87)
-with c2: v1 = st.number_input("V1 atual (%)", value=78.40)
-with c3: v2 = st.number_input("V2 desejada (%)", value=60.00)
-with c4: prnt = st.number_input("PRNT (%)", value=89.00)
+col_calc1, col_calc2, col_calc3, col_calc4 = st.columns(4)
 
-# Cálculo com trava para não dar valor negativo
-nc_calculado = ((v2 - v1) * ctc) / prnt if prnt > 0 else 0
-nc_ha = max(0.0, nc_calculado)
-nc_total = nc_ha * area_ha
+with col_calc1:
+    ctc = st.number_input("CTC (cmolc/dm³)", value=5.0, step=0.1)
+with col_calc2:
+    v1 = st.number_input("V1 (Saturação Atual %)", value=30.0, step=1.0)
+with col_calc3:
+    v2 = st.number_input("V2 (Saturação Desejada %)", value=70.0, step=1.0)
+with col_calc4:
+    prnt = st.number_input("PRNT do Calcário (%)", value=80.0, step=1.0)
 
-if nc_ha <= 0:
-    st.success("✅ Solo equilibrado ou Saturação atual maior que a desejada. Recomendação: 0.00 t/ha")
+# Lógica de Calagem com Trava para Negativos
+nc_ha_calculado = ((v2 - v1) * ctc) / prnt if prnt > 0 else 0
+
+if nc_ha_calculado <= 0:
+    nc_ha = 0.0
+    nc_total = 0.0
+    status_calagem = "✅ Solo equilibrado. Não é necessário realizar a calagem."
+    st.success(status_calagem)
 else:
-    st.info(f"👉 Recomendação: {nc_ha:.2f} t/ha | Total: {nc_total:.2f} Toneladas")
+    nc_ha = nc_ha_calculado
+    nc_total = nc_ha * area_ha
+    status_calagem = f"👉 Recomendação: {nc_ha:.2f} t/ha | Total: {nc_total:.2f} Toneladas"
+    st.info(status_calagem)
 
 st.divider()
 
-# --- 2. RECOMENDAÇÃO DE ADUBAÇÃO NPK ---
+# --- 2. PROCESSO DE ADUBAÇÃO NPK ---
 st.header("2. Adubação NPK de Precisão")
-ce, cd = st.columns(2)
+col_adubo, col_planta = st.columns(2)
 
-with ce:
-    st.write("**Garantia do Adubo (%)**")
-    f_n = st.number_input("N (%)", value=8, key="n_f")
-    f_p = st.number_input("P2O5 (%)", value=20, key="p_f")
-    f_k = st.number_input("K2O (%)", value=20, key="k_f")
+with col_adubo:
+    st.subheader("O que tem no seu Adubo? (%)")
+    f_n = st.number_input("N (%)", value=0)
+    f_p = st.number_input("P2O5 (%)", value=20)
+    f_k = st.number_input("K2O (%)", value=20)
 
-with cd:
-    st.write("**Necessidade (kg/ha)**")
-    r_n = st.number_input("Meta N", value=0.0, key="n_r")
-    r_p = st.number_input("Meta P", value=80.0, key="p_r")
-    r_k = st.number_input("Meta K", value=60.0, key="k_r")
+with col_planta:
+    st.subheader("O que a Soja precisa? (kg/ha)")
+    req_n = st.number_input("Meta de N (kg/ha)", value=0.0)
+    req_p = st.number_input("Meta de P2O5 (kg/ha)", value=80.0)
+    req_k = st.number_input("Meta de K2O (kg/ha)", value=60.0)
 
-# Lógica da maior dose
-doses = []
-if f_n > 0: doses.append((r_n / f_n) * 100)
-if f_p > 0: doses.append((r_p / f_p) * 100)
-if f_k > 0: doses.append((r_k / f_k) * 100)
+doses_teste = {}
+if f_n > 0: doses_teste['Nitrogênio'] = (req_n / f_n) * 100
+if f_p > 0: doses_teste['Fósforo'] = (req_p / f_p) * 100
+if f_k > 0: doses_teste['Potássio'] = (req_k / f_k) * 100
 
-dose_final = max(doses) if doses else 0
-total_kg = dose_final * area_ha
-sacos = int(total_kg / 50) + 1
+if doses_teste:
+    nutriente_base = max(doses_teste, key=doses_teste.get)
+    dose_mestre_ha = doses_teste[nutriente_base]
+    total_adubo_area = dose_mestre_ha * area_ha
+    sacos_50kg = int(total_adubo_area / 50) + 1
 
-if dose_final > 0:
-    res1, res2, res3 = st.columns(3)
-    res1.metric("Dose/ha", f"{dose_final:.1f} kg")
-    res2.metric("Total Área", f"{total_kg:.1f} kg")
-    res3.metric("Sacos (50kg)", f"{sacos}")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Dose Recomendada", f"{dose_mestre_ha:.1f} kg/ha")
+    m2.metric(f"Total para {area_ha} ha", f"{total_adubo_area:.1f} kg")
+    m3.metric("Sacos (50kg)", f"{sacos_50kg} un")
+else:
+    dose_mestre_ha = 0
+    total_adubo_area = 0
+    sacos_50kg = 0
 
 st.divider()
 
@@ -72,38 +86,38 @@ if st.button("🚀 Gerar Relatório Final"):
     try:
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(190, 10, "RELATORIO TECNICO", ln=True, align="C")
+        pdf.set_fill_color(34, 139, 34)
+        pdf.rect(0, 0, 210, 40, 'F')
+        pdf.set_y(12)
+        pdf.set_font("Arial", 'B', 18)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(190, 10, "RELATÓRIO DE RECOMENDAÇÃO TÉCNICA".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+        pdf.set_font("Arial", '', 12)
+        pdf.cell(190, 8, f"Consultor: Felipe Amorim".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
         
-        pdf.set_font("Arial", "", 12)
-        pdf.ln(10)
-        pdf.cell(190, 10, "Consultor: Felipe Amorim", ln=True)
-        pdf.cell(190, 10, "Area: " + str(nome_area), ln=True)
+        pdf.ln(20)
+        pdf.set_text_color(0, 0, 0)
+        
+        # Calagem no PDF
+        pdf.set_font("Arial", 'B', 12)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(180, 10, " 1. RECOMENDAÇÃO DE CALAGEM".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.set_font("Arial", size=11)
+        if nc_ha == 0:
+            pdf.cell(180, 8, " Não é necessário realizar a calagem para esta área.".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        else:
+            pdf.cell(180, 8, f" Dose por Hectare: {nc_ha:.2f} t/ha".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+            pdf.cell(180, 8, f" Total para a área: {nc_total:.2f} Toneladas".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         
         pdf.ln(5)
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(190, 10, "1. CALAGEM", ln=True)
-        pdf.set_font("Arial", "", 12)
-        pdf.cell(190, 10, "Recomendacao: " + str(round(nc_ha, 2)) + " t/ha", ln=True)
         
-        pdf.ln(5)
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(190, 10, "2. ADUBACAO NPK", ln=True)
-        pdf.set_font("Arial", "", 12)
-        pdf.cell(190, 10, "Dose: " + str(round(dose_final, 1)) + " kg/ha", ln=True)
-        pdf.cell(190, 10, "Total: " + str(round(total_kg, 1)) + " kg", ln=True)
-
-        # MÉTODO DE SAÍDA SEGURO PARA STREAMLIT
-        pdf_out = pdf.output(dest='S')
-        # Se o PDF vier como bytearray, não tentamos 'encode', apenas enviamos
+        # NPK no PDF
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(180, 10, " 2. RECOMENDAÇÃO DE ADUBAÇÃO NPK".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.set_font("Arial", size=11)
+        pdf.multi_cell(180, 8, f" Adubo: {f_n}-{f_p}-{f_k}\n Dose: {dose_mestre_ha:.1f} kg/ha\n Total Área: {total_adubo_area:.1f} kg ({sacos_50kg} sacos)".encode('latin-1', 'replace').decode('latin-1'))
         
-        st.download_button(
-            label="✅ Baixar Relatório PDF",
-            data=bytes(pdf_out),
-            file_name="Relatorio_Agro.pdf",
-            mime="application/pdf"
-        )
+        pdf_bytes = bytes(pdf.output(dest='S'))
+        st.download_button("✅ Baixar PDF", data=pdf_bytes, file_name=f"Relatorio_{talhao}.pdf")
     except Exception as e:
-        st.error("Erro técnico: " + str(e))
-
-st.caption("© 2026 | Felipe Amorim")
+        st.error(f"Erro: {e}")
