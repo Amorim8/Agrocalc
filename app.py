@@ -81,10 +81,10 @@ else:
     with colK:
         k_rec = st.number_input("K2O (kg/ha)", value=60.0)
         k_total = (k_rec / 0.60) * area_ha
-    detalhes_pdf = f"Ureia: {u_total:.1f}kg, Super: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
+    detalhes_pdf = f"Ureia: {u_total:.1f}kg, Super Simples: {s_total:.1f}kg, KCl: {k_total:.1f}kg"
 
 # --- GERAÇÃO DO PDF ---
-if st.button("🚀 Gerar PDF Profissional"):
+if st.button("🚀 Gerar PDF"):
     try:
         pdf = FPDF()
         pdf.add_page()
@@ -96,7 +96,7 @@ if st.button("🚀 Gerar PDF Profissional"):
         pdf.set_y(10)
         pdf.set_font("Arial", 'B', 20)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(190, 10, "RELATORIO DE CONSULTORIA".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+        pdf.cell(190, 10, "RELATÓRIO DE CONSULTORIA".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
         
         pdf.set_font("Arial", 'B', 15)
         pdf.cell(190, 10, "Felipe Amorim".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
@@ -106,32 +106,37 @@ if st.button("🚀 Gerar PDF Profissional"):
         pdf.set_fill_color(245, 245, 245)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", 'B', 12)
-        pdf.cell(190, 10, " IDENTIFICACAO DA AREA".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.cell(190, 10, " IDENTIFICAÇÃO DA ÁREA".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
         pdf.set_font("Arial", size=11)
-        pdf.cell(190, 8, f" Talhao: {talhao}  |  Cultura: {cultura}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-        pdf.cell(190, 8, f" Area Total: {tamanho_area} {tipo_medida}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        pdf.cell(190, 8, f" Talhão: {talhao}  |  Cultura: {cultura}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        pdf.cell(190, 8, f" Área Total: {tamanho_area} {tipo_medida}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.ln(5)
         
         # Seções de Recomendação
         pdf.set_font("Arial", 'B', 13)
         pdf.set_text_color(34, 139, 34)
-        pdf.cell(190, 10, "1. RECOMENDACAO DE CALAGEM".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        pdf.cell(190, 10, "1. RECOMENDAÇÃO DE CALAGEM".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
         pdf.cell(190, 7, f" Dose: {nc_ha:.2f} t/ha".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.set_font("Arial", 'B', 11)
         pdf.set_fill_color(235, 245, 235)
-        pdf.cell(190, 9, f" TOTAL PARA A AREA: {nc_total:.2f} Toneladas".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.cell(190, 9, f" TOTAL PARA A ÁREA: {nc_total:.2f} Toneladas".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
         pdf.ln(5)
         
         pdf.set_font("Arial", 'B', 13)
         pdf.set_text_color(34, 139, 34)
-        pdf.cell(190, 10, "2. RECOMENDACAO DE ADUBACAO NPK".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        pdf.cell(190, 10, "2. RECOMENDAÇÃO DE ADUBAÇÃO NPK".encode('latin-1', 'replace').decode('latin-1'), ln=True)
         pdf.set_font("Arial", size=11)
         pdf.set_text_color(0, 0, 0)
-        pdf.multi_cell(185, 8, f" Detalhes: {detalhes_pdf}".encode('latin-1', 'replace').decode('latin-1'))
+        pdf.multi_cell(185, 8, f" Detalhes Técnicos: {detalhes_pdf}".encode('latin-1', 'replace').decode('latin-1'))
         
-        # Download sem erro de bytearray
+        if metodo == "Usar Adubo Formulado" and valor_final_kg > 0:
+            pdf.set_font("Arial", 'B', 12)
+            pdf.set_fill_color(230, 245, 230)
+            pdf.cell(180, 10, f" QUANTIDADE TOTAL: {valor_final_kg:.1f} kg ({sacos_calc} sacos)".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+
+        # Conversão de segurança para o Streamlit
         pdf_bytes = pdf.output(dest='S')
         if isinstance(pdf_bytes, bytearray):
             pdf_bytes = bytes(pdf_bytes)
@@ -143,7 +148,7 @@ if st.button("🚀 Gerar PDF Profissional"):
             mime="application/pdf"
         )
     except Exception as e:
-        st.error(f"Erro: {e}")
+        st.error(f"Erro ao gerar PDF: {e}")
 
 st.markdown("---")
 st.caption("© 2026 | Felipe Amorim Consultoria Agronômica")
