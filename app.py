@@ -28,22 +28,26 @@ st.header("1. Análise de Solo")
 
 with st.expander("🧪 Inserir dados da análise de solo"):
 
+    profundidade = st.selectbox(
+        "Profundidade da amostra",
+        ["0–20 cm", "20–40 cm", "0–40 cm"]
+    )
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        p = st.number_input("Fósforo (ppm)", 0.0)
-        k = st.number_input("Potássio (ppm)", 0.0)
+        p = st.number_input("Fósforo (mg/dm³)", 0.0)
 
     with col2:
-        ca = st.number_input("Cálcio (cmolc/dm³)", 0.0)
-        mg = st.number_input("Magnésio (cmolc/dm³)", 0.0)
+        k = st.number_input("Potássio (cmolc/dm³ ou mg/dm³)", 0.0)
 
     with col3:
-        hal = st.number_input("H+Al (cmolc/dm³)", 0.0)
-        argila = st.number_input("Argila (%)", 0.0)
+        argila = st.number_input("Argila (valor do laudo)", 0.0)
 
-ctc = ca + mg + hal
-st.info(f"CTC calculada: {ctc:.2f}")
+# CTC simplificada (usuário define ou pode evoluir depois)
+ctc = st.number_input("CTC (cmolc/dm³)", 5.0)
+
+st.info(f"Profundidade selecionada: {profundidade}")
 
 # -------------------------------
 # CALAGEM
@@ -51,27 +55,28 @@ st.info(f"CTC calculada: {ctc:.2f}")
 st.header("2. Calagem")
 
 v1 = st.number_input("V1 (%)", 30.0)
+
 v2 = 60 if cultura == "Soja" else 70
 prnt = st.number_input("PRNT (%)", 80.0)
 
-st.caption(f"V2 recomendado: {v2}%")
+st.caption(f"V2 recomendado para {cultura}: {v2}%")
 
 if v2 > v1:
     nc = ((v2 - v1) * ctc) / 100 / (prnt / 100)
 else:
     nc = 0
 
-st.success(f"Necessidade: {nc:.2f} t/ha")
+st.success(f"Necessidade de calagem: {nc:.2f} t/ha")
 
 # -------------------------------
-# INTERPRETAÇÃO (MANUAL)
+# INTERPRETAÇÃO MANUAL (SOLO)
 # -------------------------------
-st.header("3. Interpretação do Solo")
+st.header("3. Interpretação da Análise")
 
-with st.expander("Selecionar nível do solo"):
+with st.expander("Classificar níveis do solo"):
 
-    nivel_p = st.selectbox("Fósforo", ["Baixo", "Médio", "Alto"])
-    nivel_k = st.selectbox("Potássio", ["Baixo", "Médio", "Alto"])
+    nivel_p = st.selectbox("Fósforo no solo (interpretação)", ["Baixo", "Médio", "Alto"])
+    nivel_k = st.selectbox("Potássio no solo (interpretação)", ["Baixo", "Médio", "Alto"])
 
 # -------------------------------
 # ADUBAÇÃO
@@ -79,38 +84,36 @@ with st.expander("Selecionar nível do solo"):
 st.header("4. Adubação")
 
 if cultura == "Soja":
-    tabela = {
-        "Baixo": (100, 80),
-        "Médio": (80, 60),
-        "Alto": (60, 40)
-    }
+    tabela_p = {"Baixo": 100, "Médio": 80, "Alto": 60}
+    tabela_k = {"Baixo": 80, "Médio": 60, "Alto": 40}
 else:
-    tabela = {
-        "Baixo": (120, 100),
-        "Médio": (90, 80),
-        "Alto": (60, 60)
-    }
+    tabela_p = {"Baixo": 120, "Médio": 90, "Alto": 60}
+    tabela_k = {"Baixo": 100, "Médio": 80, "Alto": 60}
 
-req_p = tabela[nivel_p][0]
-req_k = tabela[nivel_k][1]
+req_p = tabela_p[nivel_p]
+req_k = tabela_k[nivel_k]
 
-st.info(f"P2O5: {req_p} kg/ha | K2O: {req_k} kg/ha")
+st.markdown(f"""
+### Recomendação da cultura
+- Fósforo: {req_p} kg/ha  
+- Potássio: {req_k} kg/ha  
+""")
 
-# Adubo
-f_p = st.number_input("P2O5 (%)", 20.0)
-f_k = st.number_input("K2O (%)", 20.0)
+# Adubo comercial
+f_p = st.number_input("P2O5 (%) do fertilizante", 20.0)
+f_k = st.number_input("K2O (%) do fertilizante", 20.0)
 
 dose_p = (req_p / f_p) * 100 if f_p > 0 else 0
 dose_k = (req_k / f_k) * 100 if f_k > 0 else 0
 
-dose = max(dose_p, dose_k)
+dose_final = max(dose_p, dose_k)
 
-st.success(f"Dose recomendada: {dose:.1f} kg/ha")
+st.success(f"Dose recomendada: {dose_final:.1f} kg/ha")
 
 # -------------------------------
 # PDF PROFISSIONAL
 # -------------------------------
-if st.button("📄 Gerar Relatório Profissional"):
+if st.button("📄 Gerar Relatório"):
 
     pdf = FPDF()
     pdf.add_page()
@@ -128,10 +131,10 @@ if st.button("📄 Gerar Relatório Profissional"):
     pdf.set_xy(0, 20)
     pdf.cell(210, 10, "Consultor: Felipe Amorim", align="C")
 
-    pdf.ln(30)
+    pdf.ln(35)
     pdf.set_text_color(0, 0, 0)
 
-    # Seção cinza
+    # Dados área
     pdf.set_fill_color(220, 220, 220)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(190, 8, "Dados da Área", ln=True, fill=True)
@@ -140,22 +143,25 @@ if st.button("📄 Gerar Relatório Profissional"):
     pdf.cell(190, 8, f"Talhão: {talhao}", ln=True)
     pdf.cell(190, 8, f"Área: {area} ha", ln=True)
     pdf.cell(190, 8, f"Cultura: {cultura}", ln=True)
+    pdf.cell(190, 8, f"Profundidade: {profundidade}", ln=True)
 
     pdf.ln(5)
 
+    # Resultados
     pdf.set_font("Arial", "B", 12)
     pdf.cell(190, 8, "Resultados", ln=True, fill=True)
 
     pdf.set_font("Arial", "", 11)
+    pdf.cell(190, 8, f"Fósforo (mg/dm³): {p}", ln=True)
+    pdf.cell(190, 8, f"Potássio: {k}", ln=True)
+    pdf.cell(190, 8, f"Argila: {argila}", ln=True)
     pdf.cell(190, 8, f"Calagem: {nc:.2f} t/ha", ln=True)
-    pdf.cell(190, 8, f"Fósforo: {nivel_p}", ln=True)
-    pdf.cell(190, 8, f"Potássio: {nivel_k}", ln=True)
-    pdf.cell(190, 8, f"Dose de adubo: {dose:.1f} kg/ha", ln=True)
+    pdf.cell(190, 8, f"Adubação: {dose_final:.1f} kg/ha", ln=True)
 
     pdf_bytes = bytes(pdf.output(dest="S"))
 
     st.download_button(
-        "⬇️ Baixar PDF",
+        "⬇️ Baixar Relatório",
         pdf_bytes,
         file_name=f"Relatorio_{talhao}.pdf"
     )
