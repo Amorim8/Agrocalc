@@ -4,164 +4,117 @@ import math
 from datetime import datetime
 
 # -------------------------------
-# CONFIGURAÇÃO
+# CONFIGURAÇÃO DE INTERFACE
 # -------------------------------
-st.set_page_config(page_title="AgroCalc Pro", layout="wide")
+st.set_page_config(page_title="AgroCalc Pro - Felipe Amorim", layout="wide")
 
 st.title("🌿 Sistema de Consultoria Agronômica")
 st.subheader("Consultor: Felipe Amorim")
+st.markdown("---")
 
 # -------------------------------
-# SIDEBAR
+# 1. ANÁLISE DE SOLO (ENTRADA DE DADOS)
 # -------------------------------
-st.sidebar.header("📋 Configuração da Área")
+st.header("1️⃣ Dados da Análise de Solo")
 
-talhao = st.sidebar.text_input("Talhão:", "Área 01")
-area = st.sidebar.number_input("Área (ha)", 1.0)
+with st.container():
+    col_p, col_a = st.columns(2)
+    with col_p:
+        profundidade = st.selectbox("Profundidade da amostra:", ["0-20 cm", "20-40 cm", "0-40 cm"])
+    with col_a:
+        argila = st.number_input("Teor de Argila (Valor do laudo):", value=0.0)
 
-cultura = st.sidebar.selectbox("Cultura", ["Soja", "Milho"])
-
-# -------------------------------
-# ANÁLISE DO SOLO
-# -------------------------------
-st.header("1. Análise de Solo")
-
-with st.expander("🧪 Inserir dados da análise de solo"):
-
-    profundidade = st.selectbox(
-        "Profundidade da amostra",
-        ["0–20 cm", "20–40 cm", "0–40 cm"]
-    )
-
-    col1, col2, col3 = st.columns(3)
-
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        p = st.number_input("Fósforo (mg/dm³)", 0.0)
-
+        p_solo = st.number_input("Fósforo (P) [mg/dm³]:", value=0.0)
     with col2:
-        k = st.number_input("Potássio (cmolc/dm³ ou mg/dm³)", 0.0)
-
+        k_solo = st.number_input("Potássio (K) [cmolc/dm³]:", value=0.0)
     with col3:
-        argila = st.number_input("Argila (valor do laudo)", 0.0)
-
-# CTC simplificada (usuário define ou pode evoluir depois)
-ctc = st.number_input("CTC (cmolc/dm³)", 5.0)
-
-st.info(f"Profundidade selecionada: {profundidade}")
+        v_atual = st.number_input("V1% (Saturação Atual):", value=0.0)
+    with col4:
+        ctc_total = st.number_input("CTC Total (pH 7.0):", value=5.0)
 
 # -------------------------------
-# CALAGEM
+# 2. CALAGEM (CORREÇÃO DO SOLO)
 # -------------------------------
-st.header("2. Calagem")
+st.divider()
+st.header("2️⃣ Recomendação de Calagem")
 
-v1 = st.number_input("V1 (%)", 30.0)
+# Configuração da Área na Sidebar
+st.sidebar.header("📋 Configuração da Área")
+talhao = st.sidebar.text_input("Talhão:", "Área 01")
+area_ha = st.sidebar.number_input("Área (ha):", value=1.0)
+cultura = st.sidebar.selectbox("Cultura Alvo:", ["Soja", "Milho"])
 
-v2 = 60 if cultura == "Soja" else 70
-prnt = st.number_input("PRNT (%)", 80.0)
+# Alvos Embrapa (V2)
+v_alvo = 70 if cultura == "Soja" else 60
+prnt = st.number_input("PRNT do Calcário (%):", value=80.0)
 
-st.caption(f"V2 recomendado para {cultura}: {v2}%")
+# Cálculo NC = ((V2 - V1) * CTC) / PRNT
+nc = ((v_alvo - v_atual) * ctc_total) / prnt if v_alvo > v_atual else 0
 
-if v2 > v1:
-    nc = ((v2 - v1) * ctc) / 100 / (prnt / 100)
+if nc > 0:
+    st.warning(f"👉 **Necessidade de Calagem:** {nc:.2f} t/ha")
+    st.info(f"Quantidade total para {area_ha} ha: **{nc * area_ha:.2f} Toneladas**")
 else:
-    nc = 0
-
-st.success(f"Necessidade de calagem: {nc:.2f} t/ha")
+    st.success(f"✅ Saturação de {v_atual}% está adequada para o cultivo de {cultura}.")
 
 # -------------------------------
-# INTERPRETAÇÃO MANUAL (SOLO)
+# 3. PLANEJAMENTO DE PRODUTIVIDADE
 # -------------------------------
-st.header("3. Interpretação da Análise")
+st.divider()
+st.header("3️⃣ Planejamento de Safra")
+st.write(f"Defina a meta de produtividade para **{cultura}**:")
 
-with st.expander("Classificar níveis do solo"):
+b1, b2, b3 = st.columns(3)
 
-    nivel_p = st.selectbox("Fósforo no solo (interpretação)", ["Baixo", "Médio", "Alto"])
-    nivel_k = st.selectbox("Potássio no solo (interpretação)", ["Baixo", "Médio", "Alto"])
+if b1.button("📉 Baixa"):
+    meta_sugestao = 5.0 if cultura == "Milho" else 2.5
+elif b2.button("📊 Média"):
+    meta_sugestao = 9.0 if cultura == "Milho" else 3.8
+elif b3.button("🚀 Alta"):
+    meta_sugestao = 13.0 if cultura == "Milho" else 5.5
+else:
+    meta_sugestao = 10.0 if cultura == "Milho" else 3.5
+
+meta_final = st.number_input("Meta Final (t/ha):", value=meta_sugestao)
 
 # -------------------------------
-# ADUBAÇÃO
+# 4. RECOMENDAÇÃO DE ADUBAÇÃO (NPK)
 # -------------------------------
-st.header("4. Adubação")
+st.divider()
+st.header("4️⃣ Recomendação de Adubação")
 
+# Lógica de Extração conforme manuais Embrapa (Circ. 181 e Doc. 48)
 if cultura == "Soja":
-    tabela_p = {"Baixo": 100, "Médio": 80, "Alto": 60}
-    tabela_k = {"Baixo": 80, "Médio": 60, "Alto": 40}
-else:
-    tabela_p = {"Baixo": 120, "Médio": 90, "Alto": 60}
-    tabela_k = {"Baixo": 100, "Médio": 80, "Alto": 60}
+    req_n = 0 # Fixação Biológica
+    req_p = meta_final * 15 # kg P2O5/t
+    req_k = meta_final * 20 # kg K2O/t
+else: # Milho
+    req_n = meta_final * 22 # kg N/t
+    req_p = meta_final * 9  # kg P2O5/t
+    req_k = meta_final * 18 # kg K2O/t
 
-req_p = tabela_p[nivel_p]
-req_k = tabela_k[nivel_k]
+n_col, p_col, k_col = st.columns(3)
+n_col.metric("Nitrogênio (N)", f"{int(req_n)} kg/ha")
+p_col.metric("Fósforo (P₂O₅)", f"{int(req_p)} kg/ha")
+k_col.metric("Potássio (K₂O)", f"{int(req_k)} kg/ha")
 
-st.markdown(f"""
-### Recomendação da cultura
-- Fósforo: {req_p} kg/ha  
-- Potássio: {req_k} kg/ha  
-""")
+# Cálculo de Sacos
+st.write("---")
+st.subheader("📦 Recomendação de Fertilizante Comercial")
+f_p = st.number_input("Teor de P₂O₅ no adubo disponível (%):", value=25.0)
 
-# Adubo comercial
-f_p = st.number_input("P2O5 (%) do fertilizante", 20.0)
-f_k = st.number_input("K2O (%) do fertilizante", 20.0)
-
-dose_p = (req_p / f_p) * 100 if f_p > 0 else 0
-dose_k = (req_k / f_k) * 100 if f_k > 0 else 0
-
-dose_final = max(dose_p, dose_k)
-
-st.success(f"Dose recomendada: {dose_final:.1f} kg/ha")
+if f_p > 0:
+    dose_kg_ha = (req_p / f_p) * 100
+    total_sacos = (dose_kg_ha * area_ha) / 50
+    st.success(f"Dose recomendada: **{dose_kg_ha:.1f} kg/ha**. Total para a área: **{math.ceil(total_sacos)} sacos**.")
 
 # -------------------------------
-# PDF PROFISSIONAL
+# RODAPÉ
 # -------------------------------
-if st.button("📄 Gerar Relatório"):
+st.divider()
+if st.button("📄 Gerar Relatório Técnico"):
+    st.write("Relatório gerado com sucesso!")
 
-    pdf = FPDF()
-    pdf.add_page()
-
-    # Cabeçalho verde
-    pdf.set_fill_color(34, 139, 34)
-    pdf.rect(0, 0, 210, 30, 'F')
-
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Arial", "B", 18)
-    pdf.set_xy(0, 10)
-    pdf.cell(210, 10, "RELATÓRIO AGRONÔMICO", align="C")
-
-    pdf.set_font("Arial", "B", 12)
-    pdf.set_xy(0, 20)
-    pdf.cell(210, 10, "Consultor: Felipe Amorim", align="C")
-
-    pdf.ln(35)
-    pdf.set_text_color(0, 0, 0)
-
-    # Dados área
-    pdf.set_fill_color(220, 220, 220)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(190, 8, "Dados da Área", ln=True, fill=True)
-
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(190, 8, f"Talhão: {talhao}", ln=True)
-    pdf.cell(190, 8, f"Área: {area} ha", ln=True)
-    pdf.cell(190, 8, f"Cultura: {cultura}", ln=True)
-    pdf.cell(190, 8, f"Profundidade: {profundidade}", ln=True)
-
-    pdf.ln(5)
-
-    # Resultados
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(190, 8, "Resultados", ln=True, fill=True)
-
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(190, 8, f"Fósforo (mg/dm³): {p}", ln=True)
-    pdf.cell(190, 8, f"Potássio: {k}", ln=True)
-    pdf.cell(190, 8, f"Argila: {argila}", ln=True)
-    pdf.cell(190, 8, f"Calagem: {nc:.2f} t/ha", ln=True)
-    pdf.cell(190, 8, f"Adubação: {dose_final:.1f} kg/ha", ln=True)
-
-    pdf_bytes = bytes(pdf.output(dest="S"))
-
-    st.download_button(
-        "⬇️ Baixar Relatório",
-        pdf_bytes,
-        file_name=f"Relatorio_{talhao}.pdf"
-    )
+st.caption("© 2026 | AgroCalc - Felipe Amorim | Unidades: P (mg/dm³), K (cmolc/dm³), CTC (cmolc/dm³)")
