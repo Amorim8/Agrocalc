@@ -1,97 +1,123 @@
 import streamlit as st
+from fpdf import FPDF
 
-# Configuração da Interface
+# Configuração da Página
 st.set_page_config(page_title="AgroCalc - Felipe Amorim", layout="wide")
 
-st.title("🌱 Consultoria Agronômica Digital")
-st.subheader("Responsável Técnico: Felipe Amorim")
-st.markdown("---")
+st.title("🌿 Sistema de Consultoria Agronômica")
+st.subheader("Consultor: Felipe Amorim")
 
-# --- 1. ENTRADA DE DADOS: A NATA DA ANÁLISE ---
-st.header("1️⃣ Dados da Análise de Solo")
-st.write("Insira os resultados laboratoriais abaixo:")
+# --- SIDEBAR: CONFIGURAÇÃO DA ÁREA ---
+st.sidebar.header("📋 Configuração da Gleba")
+talhao = st.sidebar.text_input("Identificação do Talhão:", "Área Soja 01")
+area_ha = st.sidebar.number_input("Tamanho da Área (Hectares):", value=1.0, min_value=0.01)
 
-col_an1, col_an2, col_an3, col_an4 = st.columns(4)
-with col_an1:
-    v_atual = st.number_input("V% Atual (Saturação por Bases)", value=0.0, step=1.0)
-with col_an2:
-    ctc = st.number_input("CTC Total (pH 7,0)", value=5.0, step=0.1)
-with col_an3:
-    p_solo = st.number_input("Fósforo (P) mg/dm³", value=0.0)
-with col_an4:
-    k_solo = st.number_input("Potássio (K) mg/dm³", value=0.0)
+# --- 1. PROCESSO DE CALAGEM ---
+st.header("1. Recomendação de Calagem")
+st.write("Insira os dados da análise de solo para calcular a necessidade de calcário.")
 
-argila = st.slider("Teor de Argila (%)", 0, 100, 40)
+col_calc1, col_calc2, col_calc3, col_calc4 = st.columns(4)
 
-# --- 2. PLANEJAMENTO DA SAFRA (BOTÕES DE PRODUTIVIDADE) ---
-st.divider()
-st.header("2️⃣ Planejamento e Metas")
-cultura = st.selectbox("Selecione a Cultura Alvo:", ["Soja", "Milho"])
+with col_calc1:
+    ctc = st.number_input("CTC (cmolc/dm³)", value=5.0, step=0.1)
+with col_calc2:
+    v1 = st.number_input("V1 (Saturação Atual %)", value=30.0, step=1.0)
+with col_calc3:
+    v2 = st.number_input("V2 (Saturação Desejada %)", value=70.0, step=1.0)
+with col_calc4:
+    prnt = st.number_input("PRNT do Calcário (%)", value=80.0, step=1.0)
 
-st.write(f"Escolha sua meta de produtividade (Baseado na Embrapa):")
-c_btn1, c_btn2, c_btn3 = st.columns(3)
+# Lógica de Calagem com Trava para Negativos
+nc_ha_calculado = ((v2 - v1) * ctc) / prnt if prnt > 0 else 0
 
-if c_btn1.button("📉 Baixa Produtividade"):
-    meta_t = 5.0 if cultura == "Milho" else 2.5
-elif c_btn2.button("📊 Média Produtividade"):
-    meta_t = 9.0 if cultura == "Milho" else 3.8
-elif c_btn3.button("🚀 Alta Produtividade"):
-    meta_t = 13.0 if cultura == "Milho" else 5.5
+if nc_ha_calculado <= 0:
+    nc_ha = 0.0
+    nc_total = 0.0
+    status_calagem = "✅ Solo equilibrado. Não é necessário realizar a calagem."
+    st.success(status_calagem)
 else:
-    meta_t = 10.0 if cultura == "Milho" else 3.5
+    nc_ha = nc_ha_calculado
+    nc_total = nc_ha * area_ha
+    status_calagem = f"👉 Recomendação: {nc_ha:.2f} t/ha | Total: {nc_total:.2f} Toneladas"
+    st.info(status_calagem)
 
-meta_final = st.number_input("Meta de Colheita Ajustada (t/ha):", value=meta_t)
+st.divider()
 
-# --- LÓGICA TÉCNICA (CONFORME MANUAIS ENVIADOS) ---
-v_alvo = 70 if cultura == "Soja" else 60
+# --- 2. PROCESSO DE ADUBAÇÃO NPK ---
+st.header("2. Adubação NPK de Precisão")
+col_adubo, col_planta = st.columns(2)
 
-if cultura == "Milho":
-    n_nec = meta_final * 22  # Extração N
-    p_nec = meta_final * 9   # Extração P2O5
-    k_nec = meta_final * 18  # Extração K2O
+with col_adubo:
+    st.subheader("O que tem no seu Adubo? (%)")
+    f_n = st.number_input("N (%)", value=0)
+    f_p = st.number_input("P2O5 (%)", value=20)
+    f_k = st.number_input("K2O (%)", value=20)
+
+with col_planta:
+    st.subheader("O que a Soja precisa? (kg/ha)")
+    req_n = st.number_input("Meta de N (kg/ha)", value=0.0)
+    req_p = st.number_input("Meta de P2O5 (kg/ha)", value=80.0)
+    req_k = st.number_input("Meta de K2O (kg/ha)", value=60.0)
+
+doses_teste = {}
+if f_n > 0: doses_teste['Nitrogênio'] = (req_n / f_n) * 100
+if f_p > 0: doses_teste['Fósforo'] = (req_p / f_p) * 100
+if f_k > 0: doses_teste['Potássio'] = (req_k / f_k) * 100
+
+if doses_teste:
+    nutriente_base = max(doses_teste, key=doses_teste.get)
+    dose_mestre_ha = doses_teste[nutriente_base]
+    total_adubo_area = dose_mestre_ha * area_ha
+    sacos_50kg = int(total_adubo_area / 50) + 1
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Dose Recomendada", f"{dose_mestre_ha:.1f} kg/ha")
+    m2.metric(f"Total para {area_ha} ha", f"{total_adubo_area:.1f} kg")
+    m3.metric("Sacos (50kg)", f"{sacos_50kg} un")
 else:
-    n_nec = 0  # Inoculação
-    p_nec = meta_final * 15
-    k_nec = meta_final * 20
-
-# --- 3. RECOMENDAÇÃO DE CALAGEM ---
-st.divider()
-st.header("3️⃣ Recomendação de Calagem")
-col_c1, col_c2 = st.columns([1, 2])
-
-with col_c1:
-    prnt = st.number_input("PRNT do Calcário (%)", value=80.0)
-
-# Cálculo NC = (V2 - V1) * CTC / PRNT
-nc = ((v_alvo - v_atual) * ctc) / prnt if v_alvo > v_atual else 0
-
-with col_c2:
-    if nc > 0:
-        st.warning(f"💡 **Necessidade de Calagem:** {nc:.2f} toneladas por hectare.")
-        st.write(f"Objetivo: Elevar a saturação de **{v_atual}%** para **{v_alvo}%**.")
-    else:
-        st.success("✅ O solo já apresenta saturação por bases adequada para esta cultura.")
-
-# --- 4. RECOMENDAÇÃO DE ADUBAÇÃO ---
-st.divider()
-st.header("4️⃣ Recomendação de Adubação")
-st.write(f"Para atingir a meta de **{meta_final} t/ha**, a planta precisa de:")
-
-res_n, res_p, res_k = st.columns(3)
-res_n.metric("Nitrogênio (N)", f"{int(n_nec)} kg/ha")
-res_p.metric("Fósforo (P₂O₅)", f"{int(p_nec)} kg/ha")
-res_k.metric("Potássio (K₂O)", f"{int(k_nec)} kg/ha")
-
-# Dica técnica final
-if cultura == "Soja":
-    st.info("📢 **Nota Técnica:** Para a Soja, garanta uma boa inoculação de sementes para suprir o Nitrogênio.")
-else:
-    st.info("📢 **Nota Técnica:** No Milho, aplique 30kg de N no plantio e o restante em cobertura (V4-V6).")
-
-# --- RODAPÉ ---
-st.sidebar.markdown("---")
-area_total = st.sidebar.number_input("Área Total da Lavoura (ha):", value=1.0)
-st.sidebar.write(f"**Calcário Total:** {nc * area_total:.2f} Ton")
+    dose_mestre_ha = 0
+    total_adubo_area = 0
+    sacos_50kg = 0
 
 st.divider()
-st.caption("© 2026 | AgroCalc - Felipe Amorim | Dados baseados na Embrapa")
+
+# --- GERADOR DE PDF ---
+if st.button("🚀 Gerar Relatório Final"):
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_fill_color(34, 139, 34)
+        pdf.rect(0, 0, 210, 40, 'F')
+        pdf.set_y(12)
+        pdf.set_font("Arial", 'B', 18)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(190, 10, "RELATÓRIO DE RECOMENDAÇÃO TÉCNICA".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+        pdf.set_font("Arial", '', 12)
+        pdf.cell(190, 8, f"Consultor: Felipe Amorim".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+        
+        pdf.ln(20)
+        pdf.set_text_color(0, 0, 0)
+        
+        # Calagem no PDF
+        pdf.set_font("Arial", 'B', 12)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(180, 10, " 1. RECOMENDAÇÃO DE CALAGEM".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.set_font("Arial", size=11)
+        if nc_ha == 0:
+            pdf.cell(180, 8, " Não é necessário realizar a calagem para esta área.".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        else:
+            pdf.cell(180, 8, f" Dose por Hectare: {nc_ha:.2f} t/ha".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+            pdf.cell(180, 8, f" Total para a área: {nc_total:.2f} Toneladas".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+        
+        pdf.ln(5)
+        
+        # NPK no PDF
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(180, 10, " 2. RECOMENDAÇÃO DE ADUBAÇÃO NPK".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
+        pdf.set_font("Arial", size=11)
+        pdf.multi_cell(180, 8, f" Adubo: {f_n}-{f_p}-{f_k}\n Dose: {dose_mestre_ha:.1f} kg/ha\n Total Área: {total_adubo_area:.1f} kg ({sacos_50kg} sacos)".encode('latin-1', 'replace').decode('latin-1'))
+        
+        pdf_bytes = bytes(pdf.output(dest='S'))
+        st.download_button("✅ Baixar PDF", data=pdf_bytes, file_name=f"Relatorio_{talhao}.pdf")
+    except Exception as e:
+        st.error(f"Erro: {e}")
