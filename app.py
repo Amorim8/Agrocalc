@@ -1,122 +1,153 @@
 import streamlit as st
 from fpdf import FPDF
 
-# --- CONFIGURAÇÃO ---
-st.set_page_config(page_title="AgroCalc Pro - Felipe Amorim", layout="wide")
+# ---------------- CONFIG ----------------
+st.set_page_config(page_title="AgroCalc Pro", layout="wide")
 
 st.title("🌿 AgroCalc Pro - Consultoria Agronômica")
 st.subheader("Consultor: Felipe Amorim")
-st.markdown("---")
 
-# --- 1. IDENTIFICAÇÃO DA ÁREA (SUA ABINHA DE INFORMAÇÕES) ---
-st.header("1️⃣ Informações da Área")
-with st.container():
-    col_id1, col_id2, col_id3 = st.columns(3)
-    with col_id1:
-        cliente = st.text_input("Nome do Produtor:", "Cliente Exemplo")
-    with col_id2:
-        talhao_id = st.text_input("Identificação do Talhão:", "Gleba 01")
-    with col_id3:
-        area_ha = st.number_input("Área Total (ha):", value=1.0, min_value=0.1)
+# ---------------- SIDEBAR (AGORA COMO VOCÊ QUER) ----------------
+st.sidebar.header("📋 Informações da Área")
+
+cliente = st.sidebar.text_input("Produtor:", "Cliente Exemplo")
+talhao_id = st.sidebar.text_input("Talhão:", "Gleba 01")
+area_ha = st.sidebar.number_input("Área (ha):", 1.0)
+
+cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
 
 st.markdown("---")
 
-# --- 2. DADOS DA ANÁLISE DO SOLO ---
-st.header("2️⃣ Dados da Análise (Laboratório)")
-col_an1, col_an2, col_an3 = st.columns(3)
-with col_an1:
-    v_atual = st.number_input("V% Atual (Saturação):", value=0.0)
-    ctc_total = st.number_input("CTC Total (cmolc/dm³):", value=0.0)
-with col_an2:
-    prnt_calc = st.number_input("PRNT do Calcário (%):", value=80.0)
-    teor_argila = st.number_input("Teor de Argila (g/kg):", value=0.0)
-with col_an3:
-    cultura = st.selectbox("Cultura de Destino:", ["Soja", "Milho"])
-    v_alvo = st.number_input("V% Alvo (Desejado):", value=70.0 if cultura == "Soja" else 60.0)
+# ---------------- ANÁLISE ----------------
+st.header("1️⃣ Análise de Solo")
 
-st.markdown("---")
+with st.expander("📊 Clique para inserir dados"):
 
-# --- 3. CALAGEM (CÁLCULO SEPARADO) ---
-st.header("3️⃣ Recomendação de Calagem")
-if prnt_calc > 0 and ctc_total > 0:
-    nc_ha = ((v_alvo - v_atual) * ctc_total) / prnt_calc
-    nc_ha = max(0.0, nc_ha)
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        v_atual = st.number_input("V% Atual", 0.0)
+        ctc_total = st.number_input("CTC", 0.0)
+
+    with col2:
+        prnt_calc = st.number_input("PRNT (%)", 80.0)
+        argila = st.number_input("Argila", 0.0)
+
+    with col3:
+        profundidade = st.selectbox("Profundidade", ["0-20 cm", "20-40 cm"])
+
+# ---------------- CALAGEM ----------------
+st.header("2️⃣ Calagem")
+
+v_alvo = 70 if cultura == "Soja" else 60
+
+if prnt_calc > 0:
+    nc_base = ((v_alvo - v_atual) * ctc_total) / 100
+    nc_ha = nc_base / (prnt_calc / 100)
+    nc_ha = max(0, nc_ha)
 else:
-    nc_ha = 0.0
+    nc_ha = 0
 
 total_calc = nc_ha * area_ha
 
-c_col1, c_col2 = st.columns(2)
-c_col1.metric("Necessidade de Calcário (t/ha)", f"{nc_ha:.2f}")
-c_col2.metric(f"Total para {area_ha} ha (Toneladas)", f"{total_calc:.2f}")
+colc1, colc2 = st.columns(2)
+colc1.metric("Calcário (t/ha)", f"{nc_ha:.2f}")
+colc2.metric("Total (t)", f"{total_calc:.2f}")
 
 st.markdown("---")
 
-# --- 4. ADUBAÇÃO E NÍVEIS (CLASSIFICAÇÃO) ---
-st.header("4️⃣ Recomendação de Adubação")
-st.write("Classifique a fertilidade e escolha o formulado:")
-col_ad1, col_ad2, col_ad3 = st.columns(3)
+# ---------------- ADUBAÇÃO (MANUAL COMO VOCÊ PEDIU) ----------------
+st.header("3️⃣ Adubação (Manual)")
 
-with col_ad1:
-    nivel_p = st.selectbox("Nível de Fósforo (P):", ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"])
-with col_ad2:
-    nivel_k = st.selectbox("Nível de Potássio (K):", ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"])
-with col_ad3:
-    formulado = st.text_input("Adubo NPK Sugerido:", "04-14-08")
+col1, col2 = st.columns(2)
+
+with col1:
+    nivel_p = st.selectbox("Fósforo (P)", ["Baixo", "Médio", "Alto"])
+    req_p = st.number_input("P2O5 (kg/ha)", 0.0)
+
+with col2:
+    nivel_k = st.selectbox("Potássio (K)", ["Baixo", "Médio", "Alto"])
+    req_k = st.number_input("K2O (kg/ha)", 0.0)
+
+formulado = st.text_input("Adubo (NPK)", "04-14-08")
+
+st.success(f"Recomendação: P={req_p} kg/ha | K={req_k} kg/ha")
 
 st.markdown("---")
 
-# --- GERADOR DE PDF ---
-def gerar_relatorio():
+# ---------------- PDF ----------------
+st.header("4️⃣ Relatório")
+
+def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
-    
-    # Cabeçalho
+
+    # FUNDO VERDE
+    pdf.set_fill_color(230, 255, 230)
+    pdf.rect(0, 0, 210, 297, 'F')
+
+    # CABEÇALHO
     pdf.set_fill_color(34, 139, 34)
-    pdf.rect(0, 0, 210, 40, 'F')
+    pdf.rect(0, 0, 210, 35, 'F')
+
     pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Arial", "B", 20)
-    pdf.set_xy(0, 15)
-    pdf.cell(210, 10, "RELATORIO TECNICO AGRO".encode('latin-1', 'replace').decode('latin-1'), align="C")
-    
-    # Identificação
+    pdf.set_font("Arial", "B", 18)
+    pdf.set_xy(0, 10)
+    pdf.cell(210, 10, "RELATORIO AGRONOMICO", align="C")
+
+    pdf.set_font("Arial", "B", 14)
+    pdf.set_xy(0, 22)
+    pdf.cell(210, 10, "Felipe Amorim - Eng. Agronomo", align="C")
+
+    pdf.ln(40)
     pdf.set_text_color(0, 0, 0)
+
+    # BLOCO CINZA
+    pdf.set_fill_color(220, 220, 220)
     pdf.set_font("Arial", "B", 12)
-    pdf.set_xy(10, 50)
-    pdf.cell(0, 10, f"Produtor: {cliente} | Gleba: {talhao_id}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-    pdf.cell(0, 10, f"Area: {area_ha} ha | Cultura: {cultura}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-    
-    # Seção Calagem
-    pdf.ln(5)
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 8, "--- CALAGEM ---".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(0, 8, f"Necessidade: {nc_ha:.2f} t/ha | Total Area: {total_calc:.2f} t".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-    
-    # Seção Adubação
-    pdf.ln(5)
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(0, 8, "--- ADUBACAO ---".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(0, 8, f"Nivel P: {nivel_p} | Nivel K: {nivel_k}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-    pdf.cell(0, 8, f"Formulado Recomendado: {formulado}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+    pdf.cell(190, 8, "DADOS DA AREA", ln=True, fill=True)
 
-    pdf.ln(20)
-    pdf.set_font("Arial", "I", 10)
-    pdf.cell(0, 10, "Consultor Responsavel: Felipe Amorim", align="C")
-    
-    return pdf.output(dest='S').encode('latin-1')
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(190, 8, f"Produtor: {cliente}", ln=True)
+    pdf.cell(190, 8, f"Talhao: {talhao_id}", ln=True)
+    pdf.cell(190, 8, f"Area: {area_ha} ha", ln=True)
+    pdf.cell(190, 8, f"Cultura: {cultura}", ln=True)
+    pdf.cell(190, 8, f"Profundidade: {profundidade}", ln=True)
 
-try:
-    if st.button("GERAR PDF"):
-        pdf_bytes = gerar_relatorio()
+    pdf.ln(5)
+
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 8, "CALAGEM", ln=True, fill=True)
+
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(190, 8, f"Necessidade: {nc_ha:.2f} t/ha", ln=True)
+    pdf.cell(190, 8, f"Total: {total_calc:.2f} t", ln=True)
+
+    pdf.ln(5)
+
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 8, "ADUBACAO", ln=True, fill=True)
+
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(190, 8, f"Nivel P: {nivel_p}", ln=True)
+    pdf.cell(190, 8, f"Nivel K: {nivel_k}", ln=True)
+    pdf.cell(190, 8, f"P2O5: {req_p} kg/ha", ln=True)
+    pdf.cell(190, 8, f"K2O: {req_k} kg/ha", ln=True)
+    pdf.cell(190, 8, f"Adubo: {formulado}", ln=True)
+
+    return bytes(pdf.output(dest='S'))
+
+if st.button("📄 Gerar PDF"):
+    try:
+        pdf_bytes = gerar_pdf()
+
         st.download_button(
-            label="⬇️ Baixar Relatório",
-            data=pdf_bytes,
+            "⬇️ Baixar Relatório",
+            pdf_bytes,
             file_name=f"Relatorio_{talhao_id}.pdf",
             mime="application/pdf"
         )
-except Exception as e:
-    st.error(f"Erro ao preparar o arquivo. Verifique os dados.")
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {e}")
 
-st.caption("Sistema AgroCalc Pro | Felipe Amorim")
+st.caption("AgroCalc Pro | Felipe Amorim")
