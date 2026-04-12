@@ -1,195 +1,115 @@
 import streamlit as st
 from fpdf import FPDF
-import math
 
-# ---------------- CONFIG ----------------
-st.set_page_config(page_title="Consultoria Agronômica", layout="wide")
+# --- CONFIGURAÇÃO ---
+st.set_page_config(page_title="AgroCalc Pro - Felipe Amorim", layout="wide")
 
-st.title("🌿 Consultoria Agronômica")
+st.title("🌿 AgroCalc Pro - Consultoria Agronômica")
 st.subheader("Consultor: Felipe Amorim")
+st.markdown("---")
 
-# ---------------- SIDEBAR ----------------
-st.sidebar.header("📋 Informações da Área")
+# --- 1. IDENTIFICAÇÃO DA ÁREA ---
+st.header("1️⃣ Informações da Área")
+with st.container():
+    col_id1, col_id2, col_id3 = st.columns(3)
+    with col_id1:
+        cliente = st.text_input("Nome do Produtor:", "Cliente Exemplo")
+    with col_id2:
+        talhao_id = st.text_input("Identificação do Talhão:", "Gleba 01")
+    with col_id3:
+        area_ha = st.number_input("Área Total (ha):", value=1.0, min_value=0.1)
 
-cliente = st.sidebar.text_input("Produtor:", "Cliente")
-talhao = st.sidebar.text_input("Talhão:", "Gleba 01")
+st.markdown("---")
 
-area = st.sidebar.number_input(
-    "Área (ha):",
-    min_value=0.01,
-    value=1.0,
-    step=0.1
-)
+# --- 2. DADOS DA ANÁLISE DO SOLO ---
+st.header("2️⃣ Dados da Análise (Laboratório)")
+col_an1, col_an2, col_an3 = st.columns(3)
+with col_an1:
+    v_atual = st.number_input("V% Atual (Saturação):", value=0.0)
+    ctc_total = st.number_input("CTC Total (cmolc/dm³):", value=0.0)
+with col_an2:
+    prnt_calc = st.number_input("PRNT do Calcário (%):", value=80.0)
+    teor_argila = st.number_input("Teor de Argila (g/kg):", value=0.0)
+with col_an3:
+    cultura = st.selectbox("Cultura de Destino:", ["Soja", "Milho"])
+    v_alvo = st.number_input("V% Alvo (Desejado):", value=70.0 if cultura == "Soja" else 60.0)
 
-cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
+st.markdown("---")
 
-# V% automático
-v_alvo = 70 if cultura == "Soja" else 60
-
-# ---------------- ANÁLISE COMPLETA ----------------
-st.header("1️⃣ Análise de Solo (Química)")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    p = st.number_input("Fósforo (mg/dm³)", 0.0)
-    k = st.number_input("Potássio (cmolc/dm³)", 0.0)
-
-with col2:
-    argila = st.number_input("Argila (g/kg ou %)", 0.0)
-    v_atual = st.number_input("V% Atual", 0.0)
-
-with col3:
-    ctc = st.number_input("CTC (cmolc/dm³)", 5.0)
-    prnt = st.number_input("PRNT (%)", 80.0)
-
-# ---------------- CALAGEM ----------------
-st.header("2️⃣ Calagem")
-
-if v_atual >= v_alvo:
-    nc = 0
-    obs_calagem = "Nao e necessario realizar calagem. Considerar uso de silicio."
+# --- 3. CALAGEM ---
+st.header("3️⃣ Recomendação de Calagem")
+if prnt_calc > 0 and ctc_total > 0:
+    nc_ha = ((v_alvo - v_atual) * ctc_total) / prnt_calc
+    nc_ha = max(0.0, nc_ha)
 else:
-    nc = ((v_alvo - v_atual) * ctc) / 100
-    nc = nc / (prnt / 100) if prnt > 0 else 0
-    obs_calagem = "Realizar calagem conforme recomendacao."
+    nc_ha = 0.0
 
-total_calc = nc * area
+total_calc = nc_ha * area_ha
 
-colc1, colc2 = st.columns(2)
+c_col1, c_col2 = st.columns(2)
+c_col1.metric("Necessidade de Calcário (t/ha)", f"{nc_ha:.2f}")
+c_col2.metric(f"Total para {area_ha} ha (Toneladas)", f"{total_calc:.2f}")
 
-colc1.metric("Calcário (t/ha)", f"{nc:.2f}")
-colc2.metric("Total (t)", f"{total_calc:.2f}")
+st.markdown("---")
 
-st.info(obs_calagem)
+# --- 4. ADUBAÇÃO E NÍVEIS ---
+st.header("4️⃣ Recomendação de Adubação")
+col_ad1, col_ad2, col_ad3 = st.columns(3)
 
-# ---------------- INTERPRETAÇÃO ----------------
-st.header("3️⃣ Interpretação do Solo")
+with col_ad1:
+    nivel_p = st.selectbox("Nível de Fósforo (P):", ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"])
+    p_puro = st.number_input("Necessidade de P2O5 (kg/ha):", value=0.0)
+with col_ad2:
+    nivel_k = st.selectbox("Nível de Potássio (K):", ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"])
+    perc_p_adubo = st.number_input("% de P2O5 no Adubo:", value=14.0)
+with col_ad3:
+    formulado = st.text_input("Adubo NPK Sugerido:", "04-14-08")
+    # Cálculo da quantidade de adubo baseado no Fósforo
+    dose_adubo = (p_puro * 100) / perc_p_adubo if perc_p_adubo > 0 else 0.0
 
-niveis = ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"]
+if dose_adubo > 0:
+    st.success(f"✅ Dose Recomendada: **{dose_adubo:.2f} kg/ha** do formulado {formulado}")
 
-col1, col2, col3 = st.columns(3)
+st.markdown("---")
 
-with col1:
-    nivel_n = st.selectbox("Nitrogênio", niveis)
-
-with col2:
-    nivel_p = st.selectbox("Fósforo", niveis)
-
-with col3:
-    nivel_k = st.selectbox("Potássio", niveis)
-
-# ---------------- TABELA ----------------
-tabela = {
-    "Soja": {
-        "N": {n: 0 for n in niveis},
-        "P": {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 50, "Muito Alto": 30},
-        "K": {"Muito Baixo": 100, "Baixo": 90, "Médio": 70, "Alto": 50, "Muito Alto": 30}
-    },
-    "Milho": {
-        "N": {"Muito Baixo": 140, "Baixo": 120, "Médio": 90, "Alto": 60, "Muito Alto": 40},
-        "P": {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 60, "Muito Alto": 40},
-        "K": {"Muito Baixo": 100, "Baixo": 90, "Médio": 70, "Alto": 60, "Muito Alto": 40}
-    }
-}
-
-req_n = tabela[cultura]["N"][nivel_n]
-req_p = tabela[cultura]["P"][nivel_p]
-req_k = tabela[cultura]["K"][nivel_k]
-
-if cultura == "Soja":
-    obs_n = "Nitrogenio dispensado. Focar na inoculacao."
-else:
-    obs_n = "Aplicar nitrogenio conforme recomendacao."
-
-st.success(f"N: {req_n} | P: {req_p} | K: {req_k} kg/ha")
-st.warning(obs_n)
-
-# ---------------- ADUBO ----------------
-st.header("4️⃣ Adubo Formulado")
-
-col1, col2, col3 = st.columns(3)
-
-f_n = col1.number_input("N (%)", 0)
-f_p = col2.number_input("P (%)", 20)
-f_k = col3.number_input("K (%)", 20)
-
-dose = 0
-sacos = 0
-
-if f_p > 0:
-    dose = (req_p / f_p) * 100
-    total_adubo = dose * area
-    sacos = math.ceil(total_adubo / 50)
-
-    st.success(f"Dose: {dose:.0f} kg/ha | Total: {sacos} sacos")
-
-# ---------------- PDF ----------------
-st.header("5️⃣ Relatório")
-
-def gerar_pdf():
+# --- GERADOR DE PDF COM ACENTOS ---
+def gerar_relatorio():
     pdf = FPDF()
     pdf.add_page()
-
-    pdf.set_fill_color(230,255,230)
-    pdf.rect(0,0,210,297,'F')
-
-    pdf.set_fill_color(34,139,34)
-    pdf.rect(0,0,210,35,'F')
-
-    pdf.set_text_color(255,255,255)
-    pdf.set_font("Arial","B",18)
-    pdf.cell(210,15,"CONSULTORIA AGRONOMICA", align="C")
-
-    pdf.ln(10)
-    pdf.set_font("Arial","B",12)
-    pdf.cell(210,10,"Consultor: Felipe Amorim", align="C")
-
-    pdf.ln(25)
-    pdf.set_text_color(0,0,0)
-
-    pdf.set_font("Arial","B",12)
-    pdf.cell(190,8,"DADOS DA AREA",ln=True,fill=True)
-
-    pdf.set_font("Arial","",11)
-    pdf.cell(190,8,f"Produtor: {cliente}",ln=True)
-    pdf.cell(190,8,f"Area: {area} ha",ln=True)
-    pdf.cell(190,8,f"Cultura: {cultura}",ln=True)
-
+    
+    # Cabeçalho
+    pdf.set_fill_color(34, 139, 34)
+    pdf.rect(0, 0, 210, 40, 'F')
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Arial", "B", 20)
+    pdf.set_xy(0, 15)
+    # Título com acento corrigido
+    pdf.cell(210, 10, "RELATÓRIO TÉCNICO AGRONÔMICO".encode('latin-1', 'replace').decode('latin-1'), align="C")
+    
+    # Identificação
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", "B", 12)
+    pdf.set_xy(10, 50)
+    pdf.cell(0, 10, f"Produtor: {cliente} | Gleba: {talhao_id}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+    pdf.cell(0, 10, f"Área: {area_ha} ha | Cultura: {cultura}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+    
+    # Seção Calagem com acentos
     pdf.ln(5)
-
-    pdf.set_font("Arial","B",12)
-    pdf.cell(190,8,"ANALISE DO SOLO",ln=True,fill=True)
-
-    pdf.set_font("Arial","",11)
-    pdf.cell(190,8,f"P: {p}",ln=True)
-    pdf.cell(190,8,f"K: {k}",ln=True)
-    pdf.cell(190,8,f"Argila: {argila}",ln=True)
-    pdf.cell(190,8,f"V%: {v_atual}",ln=True)
-
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(0, 8, "--- RECOMENDAÇÃO DE CALAGEM ---".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(0, 8, f"Necessidade: {nc_ha:.2f} t/ha | Total da Área: {total_calc:.2f} t".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+    
+    # Seção Adubação com acentos e Dose
     pdf.ln(5)
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(0, 8, "--- RECOMENDAÇÃO DE ADUBAÇÃO ---".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(0, 8, f"Nível P: {nivel_p} | Nível K: {nivel_k}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+    pdf.cell(0, 8, f"Adubo Sugerido: {formulado}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, f"QUANTIDADE A APLICAR: {dose_adubo:.2f} kg/ha".encode('latin-1', 'replace').decode('latin-1'), ln=True)
 
-    pdf.set_font("Arial","B",12)
-    pdf.cell(190,8,"CALAGEM",ln=True,fill=True)
-
-    pdf.set_font("Arial","",11)
-
-    if nc == 0:
-        pdf.multi_cell(190,8,obs_calagem)
-    else:
-        pdf.cell(190,8,f"Necessidade: {nc:.2f} t/ha",ln=True)
-
-    pdf.ln(5)
-
-    pdf.set_font("Arial","B",12)
-    pdf.cell(190,8,"ADUBACAO",ln=True,fill=True)
-
-    pdf.set_font("Arial","",11)
-    pdf.cell(190,8,f"N: {req_n} | P: {req_p} | K: {req_k}",ln=True)
-    pdf.cell(190,8,obs_n,ln=True)
-
-    return bytes(pdf.output(dest='S'))
-
-if st.button("📄 Gerar PDF"):
-    pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Baixar", pdf_bytes, file_name="relatorio.pdf")
+    pdf.ln(20)
+    pdf.set_font("Arial", "I", 10)
+    pdf.cell(0, 10, "Consultor Responsável: Felipe Amorim".encode('latin-1', 'replace').decode('latin-1'), align="C")
