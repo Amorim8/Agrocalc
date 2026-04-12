@@ -1,123 +1,195 @@
 import streamlit as st
 from fpdf import FPDF
+import math
+from datetime import datetime
 
-# Configuração da Página
+# -------------------------------
+# CONFIGURAÇÃO
+# -------------------------------
 st.set_page_config(page_title="AgroCalc - Felipe Amorim", layout="wide")
 
 st.title("🌿 Sistema de Consultoria Agronômica")
 st.subheader("Consultor: Felipe Amorim")
 
-# --- SIDEBAR: CONFIGURAÇÃO DA ÁREA ---
-st.sidebar.header("📋 Configuração da Gleba")
+# -------------------------------
+# CULTURAS
+# -------------------------------
+culturas = {
+    "Soja": {"N": 0, "P": 80, "K": 60, "V": 60},
+    "Milho": {"N": 120, "P": 90, "K": 80, "V": 70},
+    "Pastagem": {"N": 80, "P": 60, "K": 50, "V": 50}
+}
+
+# -------------------------------
+# SIDEBAR
+# -------------------------------
+st.sidebar.header("📋 Configuração da Área")
+
 talhao = st.sidebar.text_input("Identificação do Talhão:", "Área Soja 01")
-area_ha = st.sidebar.number_input("Tamanho da Área (Hectares):", value=1.0, min_value=0.01)
+area_ha = st.sidebar.number_input("Tamanho da Área (ha):", value=1.0, min_value=0.01)
 
-# --- 1. PROCESSO DE CALAGEM ---
+cultura = st.sidebar.selectbox("Cultura", list(culturas.keys()))
+
+# -------------------------------
+# CALAGEM
+# -------------------------------
 st.header("1. Recomendação de Calagem")
-st.write("Insira os dados da análise de solo para calcular a necessidade de calcário.")
 
-col_calc1, col_calc2, col_calc3, col_calc4 = st.columns(4)
+ctc = st.number_input("CTC (cmolc/dm³)", value=5.0)
+v1 = st.number_input("V1 (%)", value=30.0)
+v2 = culturas[cultura]["V"]
+prnt = st.number_input("PRNT (%)", value=80.0)
 
-with col_calc1:
-    ctc = st.number_input("CTC (cmolc/dm³)", value=5.0, step=0.1)
-with col_calc2:
-    v1 = st.number_input("V1 (Saturação Atual %)", value=30.0, step=1.0)
-with col_calc3:
-    v2 = st.number_input("V2 (Saturação Desejada %)", value=70.0, step=1.0)
-with col_calc4:
-    prnt = st.number_input("PRNT do Calcário (%)", value=80.0, step=1.0)
+st.caption(f"V2 automático para {cultura}: {v2}%")
 
-# Lógica de Calagem com Trava para Negativos
-nc_ha_calculado = ((v2 - v1) * ctc) / prnt if prnt > 0 else 0
+interpretacao = ""
 
-if nc_ha_calculado <= 0:
-    nc_ha = 0.0
-    nc_total = 0.0
-    status_calagem = "✅ Solo equilibrado. Não é necessário realizar a calagem."
-    st.success(status_calagem)
+if v2 <= v1:
+    st.warning("⚠️ V2 deve ser maior que V1 para haver necessidade de calagem.")
+    nc_ha = 0
 else:
-    nc_ha = nc_ha_calculado
-    nc_total = nc_ha * area_ha
-    status_calagem = f"👉 Recomendação: {nc_ha:.2f} t/ha | Total: {nc_total:.2f} Toneladas"
-    st.info(status_calagem)
+    if prnt > 0:
+        nc_base = ((v2 - v1) * ctc) / 100
+        nc_ha = nc_base / (prnt / 100)
+    else:
+        nc_ha = 0
 
-st.divider()
+nc_total = nc_ha * area_ha
 
-# --- 2. PROCESSO DE ADUBAÇÃO NPK ---
-st.header("2. Adubação NPK de Precisão")
-col_adubo, col_planta = st.columns(2)
-
-with col_adubo:
-    st.subheader("O que tem no seu Adubo? (%)")
-    f_n = st.number_input("N (%)", value=0)
-    f_p = st.number_input("P2O5 (%)", value=20)
-    f_k = st.number_input("K2O (%)", value=20)
-
-with col_planta:
-    st.subheader("O que a Soja precisa? (kg/ha)")
-    req_n = st.number_input("Meta de N (kg/ha)", value=0.0)
-    req_p = st.number_input("Meta de P2O5 (kg/ha)", value=80.0)
-    req_k = st.number_input("Meta de K2O (kg/ha)", value=60.0)
-
-doses_teste = {}
-if f_n > 0: doses_teste['Nitrogênio'] = (req_n / f_n) * 100
-if f_p > 0: doses_teste['Fósforo'] = (req_p / f_p) * 100
-if f_k > 0: doses_teste['Potássio'] = (req_k / f_k) * 100
-
-if doses_teste:
-    nutriente_base = max(doses_teste, key=doses_teste.get)
-    dose_mestre_ha = doses_teste[nutriente_base]
-    total_adubo_area = dose_mestre_ha * area_ha
-    sacos_50kg = int(total_adubo_area / 50) + 1
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Dose Recomendada", f"{dose_mestre_ha:.1f} kg/ha")
-    m2.metric(f"Total para {area_ha} ha", f"{total_adubo_area:.1f} kg")
-    m3.metric("Sacos (50kg)", f"{sacos_50kg} un")
+if nc_ha == 0:
+    interpretacao = "Solo equilibrado. Não necessita calagem."
+    st.success(interpretacao)
 else:
-    dose_mestre_ha = 0
-    total_adubo_area = 0
-    sacos_50kg = 0
+    if nc_ha < 2:
+        interpretacao = "Baixa necessidade de calagem"
+    elif nc_ha <= 4:
+        interpretacao = "Média necessidade de calagem"
+    else:
+        interpretacao = "Alta necessidade de calagem"
 
-st.divider()
+    st.info(f"👉 {nc_ha:.2f} t/ha | Total: {nc_total:.2f} t")
+    st.caption(interpretacao)
 
-# --- GERADOR DE PDF ---
-if st.button("🚀 Gerar Relatório Final"):
-    try:
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_fill_color(34, 139, 34)
-        pdf.rect(0, 0, 210, 40, 'F')
-        pdf.set_y(12)
-        pdf.set_font("Arial", 'B', 18)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(190, 10, "RELATÓRIO DE RECOMENDAÇÃO TÉCNICA".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
-        pdf.set_font("Arial", '', 12)
-        pdf.cell(190, 8, f"Consultor: Felipe Amorim".encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
-        
-        pdf.ln(20)
-        pdf.set_text_color(0, 0, 0)
-        
-        # Calagem no PDF
-        pdf.set_font("Arial", 'B', 12)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.cell(180, 10, " 1. RECOMENDAÇÃO DE CALAGEM".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
-        pdf.set_font("Arial", size=11)
-        if nc_ha == 0:
-            pdf.cell(180, 8, " Não é necessário realizar a calagem para esta área.".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-        else:
-            pdf.cell(180, 8, f" Dose por Hectare: {nc_ha:.2f} t/ha".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-            pdf.cell(180, 8, f" Total para a área: {nc_total:.2f} Toneladas".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-        
-        pdf.ln(5)
-        
-        # NPK no PDF
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(180, 10, " 2. RECOMENDAÇÃO DE ADUBAÇÃO NPK".encode('latin-1', 'replace').decode('latin-1'), ln=True, fill=True)
-        pdf.set_font("Arial", size=11)
-        pdf.multi_cell(180, 8, f" Adubo: {f_n}-{f_p}-{f_k}\n Dose: {dose_mestre_ha:.1f} kg/ha\n Total Área: {total_adubo_area:.1f} kg ({sacos_50kg} sacos)".encode('latin-1', 'replace').decode('latin-1'))
-        
-        pdf_bytes = bytes(pdf.output(dest='S'))
-        st.download_button("✅ Baixar PDF", data=pdf_bytes, file_name=f"Relatorio_{talhao}.pdf")
-    except Exception as e:
-        st.error(f"Erro: {e}")
+    if nc_ha > 3:
+        st.warning("⚠️ Recomenda-se parcelamento da aplicação")
+
+# -------------------------------
+# GESSAGEM
+# -------------------------------
+st.header("2. Gessagem")
+
+gesso = ctc * 0.5 if nc_ha > 0 else 0
+st.info(f"👉 Aplicar aproximadamente {gesso:.2f} t/ha de gesso agrícola")
+
+# -------------------------------
+# ADUBAÇÃO
+# -------------------------------
+st.header("3. Adubação NPK")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Adubo (%)")
+    f_n = st.number_input("N (%)", value=0.0)
+    f_p = st.number_input("P2O5 (%)", value=20.0)
+    f_k = st.number_input("K2O (%)", value=20.0)
+
+with col2:
+    st.subheader("Necessidade da cultura (kg/ha)")
+    req_n = culturas[cultura]["N"]
+    req_p = culturas[cultura]["P"]
+    req_k = culturas[cultura]["K"]
+
+    st.markdown(f"""
+- **N:** {req_n} kg/ha  
+- **P₂O₅:** {req_p} kg/ha  
+- **K₂O:** {req_k} kg/ha  
+""")
+
+doses = {}
+
+if f_n > 0:
+    doses["Nitrogênio"] = (req_n / f_n) * 100
+if f_p > 0:
+    doses["Fósforo"] = (req_p / f_p) * 100
+if f_k > 0:
+    doses["Potássio"] = (req_k / f_k) * 100
+
+if doses:
+    nutriente_base = max(doses, key=doses.get)
+    dose_ha = doses[nutriente_base]
+
+    total = dose_ha * area_ha
+    sacos = math.ceil(total / 50)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Dose (kg/ha)", f"{dose_ha:.1f}")
+    c2.metric("Total (kg)", f"{total:.1f}")
+    c3.metric("Sacos (50kg)", f"{sacos}")
+
+    st.caption(f"Nutriente limitante: {nutriente_base}")
+else:
+    dose_ha = 0
+    total = 0
+    sacos = 0
+    nutriente_base = "-"
+
+# -------------------------------
+# CUSTOS
+# -------------------------------
+st.header("4. Custos")
+
+preco_calcario = st.number_input("Preço calcário (R$/t)", value=150.0)
+preco_adubo = st.number_input("Preço adubo (R$/ton)", value=2500.0)
+
+custo_calcario = nc_total * preco_calcario
+custo_adubo = (total / 1000) * preco_adubo
+
+st.metric("Custo Calagem", f"R$ {custo_calcario:.2f}")
+st.metric("Custo Adubação", f"R$ {custo_adubo:.2f}")
+
+# -------------------------------
+# PDF
+# -------------------------------
+if st.button("📄 Gerar Relatório"):
+    pdf = FPDF()
+    pdf.add_page()
+
+    data = datetime.today().strftime('%d/%m/%Y')
+
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(190, 10, "RELATÓRIO AGRONÔMICO", ln=True, align="C")
+
+    pdf.set_font("Arial", size=11)
+    pdf.cell(190, 8, f"Data: {data}", ln=True)
+    pdf.cell(190, 8, f"Talhão: {talhao}", ln=True)
+    pdf.cell(190, 8, f"Área: {area_ha} ha", ln=True)
+    pdf.cell(190, 8, f"Cultura: {cultura}", ln=True)
+
+    pdf.ln(5)
+
+    pdf.cell(190, 8, f"Calagem: {nc_ha:.2f} t/ha", ln=True)
+    pdf.cell(190, 8, f"Interpretação: {interpretacao}", ln=True)
+
+    pdf.ln(5)
+
+    pdf.cell(190, 8, f"Gessagem: {gesso:.2f} t/ha", ln=True)
+
+    pdf.ln(5)
+
+    pdf.cell(190, 8, f"Adubo: {f_n}-{f_p}-{f_k}", ln=True)
+    pdf.cell(190, 8, f"Dose: {dose_ha:.1f} kg/ha", ln=True)
+    pdf.cell(190, 8, f"Nutriente limitante: {nutriente_base}", ln=True)
+
+    pdf.ln(5)
+
+    pdf.cell(190, 8, f"Custo Calagem: R$ {custo_calcario:.2f}", ln=True)
+    pdf.cell(190, 8, f"Custo Adubação: R$ {custo_adubo:.2f}", ln=True)
+
+    pdf_bytes = bytes(pdf.output(dest="S"))
+
+    st.download_button(
+        "⬇️ Baixar PDF",
+        pdf_bytes,
+        file_name=f"Relatorio_{talhao}.pdf"
+    )
