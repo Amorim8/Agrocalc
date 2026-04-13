@@ -212,14 +212,15 @@ def gerar_pdf():
         pdf.cell(190,8, txt(f"Dose: {dose:.0f} kg/ha"), ln=True)
         pdf.cell(190,8, txt(f"Sacos: {sacos}"), ln=True)
 
-    return bytes(pdf.output(dest='S'))
+    # ✅ CORREÇÃO AQUI
+    return pdf.output(dest='S').encode('latin-1')
 
-# BOTÃO SEGURO
-try:
-    if st.button("📄 Gerar PDF"):
+# BOTÃO
+if st.button("📄 Gerar PDF"):
+    try:
         pdf_bytes = gerar_pdf()
         st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name="relatorio.pdf")
-except Exception as e:
-    st.error(f"Erro ao gerar PDF: {e}")
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {e}")
 
 st.caption("Sistema de Consultoria Agronômica | Felipe Amorim")
