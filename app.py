@@ -76,7 +76,7 @@ with col2:
 with col3:
     nivel_k = st.selectbox("Potássio", niveis)
 
-# ---------------- TABELA ----------------
+# ---------------- TABELA (CORRIGIDA) ----------------
 tabela = {
     "Soja": {
         "N": {n: 0 for n in niveis},
@@ -85,4 +85,22 @@ tabela = {
     },
     "Milho": {
         "N": {"Muito Baixo": 140, "Baixo": 120, "Médio": 90, "Alto": 60, "Muito Alto": 40},
-        "P": {"Muito Baixo": 12
+        "P": {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 60, "Muito Alto": 40},
+        "K": {"Muito Baixo": 100, "Baixo": 90, "Médio": 70, "Alto": 60, "Muito Alto": 40}
+    }
+}
+
+req_n = tabela[cultura]["N"][nivel_n]
+req_p = tabela[cultura]["P"][nivel_p]
+req_k = tabela[cultura]["K"][nivel_k]
+
+if cultura == "Soja":
+    obs_n = "Nitrogênio dispensado. Focar na inoculação."
+else:
+    obs_n = "Aplicar nitrogênio conforme recomendação."
+
+st.success(f"N: {req_n} | P: {req_p} | K: {req_k} kg/ha")
+st.warning(obs_n)
+
+# ---------------- ADUBO FORMULADO ----------------
+st
