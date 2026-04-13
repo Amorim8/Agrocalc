@@ -102,7 +102,7 @@ if cultura == "Soja":
 else:
     obs_n = "Aplicar nitrogênio conforme recomendação."
 
-st.success(f"N: {req_n} | P: {req_p} | K: {req_k} kg/ha")
+st.success(f"N: {req_n} | P2O5: {req_p} | K2O: {req_k} kg/ha")
 st.warning(obs_n)
 
 # ---------------- ADUBO FORMULADO ----------------
@@ -191,14 +191,14 @@ def gerar_pdf():
 
     pdf.ln(5)
 
-    # ADUBAÇÃO
+    # ADUBAÇÃO (CORRIGIDO)
     pdf.set_font("Arial","B",12)
     pdf.cell(190,8, txt("ADUBAÇÃO"), ln=True, fill=True)
 
     pdf.set_font("Arial","",11)
     pdf.cell(190,8, txt(f"N: {req_n} kg/ha"), ln=True)
-    pdf.cell(190,8, txt(f"P₂O₅: {req_p} kg/ha"), ln=True)
-    pdf.cell(190,8, txt(f"K₂O: {req_k} kg/ha"), ln=True)
+    pdf.cell(190,8, txt(f"P2O5: {req_p} kg/ha"), ln=True)
+    pdf.cell(190,8, txt(f"K2O: {req_k} kg/ha"), ln=True)
     pdf.cell(190,8, txt(obs_n), ln=True)
 
     # ADUBO FORMULADO
@@ -212,7 +212,6 @@ def gerar_pdf():
         pdf.cell(190,8, txt(f"Dose: {dose:.0f} kg/ha"), ln=True)
         pdf.cell(190,8, txt(f"Sacos: {sacos}"), ln=True)
 
-    # ✅ CORREÇÃO AQUI
     return pdf.output(dest='S').encode('latin-1')
 
 # BOTÃO
