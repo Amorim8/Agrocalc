@@ -121,17 +121,4 @@ if f_p > 0:
     dose = (req_p / f_p) * 100
     total_adubo = dose * area
     sacos = math.ceil(total_adubo / 50)
-    st.success(f"Dose: {dose:.0f} kg/ha | Total: {sacos} sacos")
-
-# ---------------- PDF ----------------
-st.header("5️⃣ Relatório")
-
-def gerar_pdf():
-    pdf = FPDF()
-    pdf.add_page()
-
-    def txt(t):
-        return str(t).encode('latin-1', 'replace').decode('latin-1')
-
-    # Estilização básica
-    pdf.set_fill_color(230,255,23
+    st.success(f"Dose: {dose:.0f} kg/ha | Total: {sacos} sac
