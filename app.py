@@ -2,95 +2,100 @@ import streamlit as st
 from fpdf import FPDF
 import math
 import re
-from datetime import datetime
 
-# --- TENTATIVA DE IMPORTAR BIBLIOTECAS ---
+# --- VERIFICAÇÃO DE BIBLIOTECA ---
 try:
     from PyPDF2 import PdfReader
-    PDF_OK = True
-except:
-    PDF_OK = False
+    PDF_DISPONIVEL = True
+except ImportError:
+    PDF_DISPONIVEL = False
 
 st.set_page_config(page_title="AgroCalc Pro - Felipe Amorim", layout="wide")
 
 st.title("🌿 Consultoria Agronômica")
 st.subheader("Consultor: Felipe Amorim")
 
-# --- 1. LÓGICA DE EXTRAÇÃO ---
-st.sidebar.header("📄 1. Arquivo de Análise")
-arquivo_pdf = st.sidebar.file_uploader("Subir PDF com as análises", type=["pdf"])
+# --- 1. LÓGICA DE EXTRAÇÃO DE DADOS ---
+st.sidebar.header("📄 Importar Análise")
+arquivo_pdf = st.sidebar.file_uploader("Subir PDF da Análise", type=["pdf"])
 
-dados_finais = {"p": 0.0, "k": 0.0, "arg": 0.0, "v": 0.0, "ctc": 5.0}
+# Dicionário para guardar os dados que serão exibidos nos campos
+val = {"p": 0.0, "k": 0.0, "arg": 0.0, "v": 0.0, "ctc": 5.0}
 
-if arquivo_pdf and PDF_OK:
-    reader = PdfReader(arquivo_pdf)
-    texto_total = ""
-    paginas_texto = []
-    for page in reader.pages:
-        t = page.extract_text()
-        texto_total += t + "\n"
-        paginas_texto.append(t)
-    
-    # Identifica possíveis nomes de áreas/análises
-    areas_encontradas = re.findall(r"(?:Identifica[çã]o|Gleba|Talh[ã]o|Lote|Amostra):\s*([A-Za-z0-9\s\-]+)", texto_total, re.IGNORECASE)
-    if not areas_encontradas:
-        areas_encontradas = ["Análise Encontrada 01", "Análise Encontrada 02"]
-    
-    area_selecionada = st.sidebar.selectbox("Escolha qual área carregar:", list(set(areas_encontradas)))
-    camada = st.sidebar.radio("Qual profundidade?", ["0-20", "20-40"])
+if arquivo_pdf and PDF_DISPONIVEL:
+    try:
+        reader = PdfReader(arquivo_pdf)
+        texto_completo = ""
+        for page in reader.pages:
+            texto_completo += page.extract_text() + "\n"
+        
+        # 1. Identifica os nomes das áreas/glebas no PDF para você escolher
+        areas = re.findall(r"(?:Gleba|Lote|Talh[ã]o|Área|Amostra)\s*[:\-]?\s*([A-Za-z0-9\s]+)", texto_completo, re.IGNORECASE)
+        areas = list(set([a.strip() for a in areas if len(a.strip()) > 1]))
+        
+        if not areas:
+            areas = ["Análise Principal"]
+        
+        escolha = st.sidebar.selectbox("Selecione a Área/Gleba do PDF:", areas)
+        camada = st.sidebar.radio("Profundidade:", ["0-20", "20-40"])
 
-    # Busca os valores no bloco de texto específico
-    def extrair(termo, txt):
-        match = re.search(termo + r".*?(\d+[.,]?\d*)", txt, re.IGNORECASE)
-        return float(match.group(1).replace(",", ".")) if match else 0.0
+        # 2. Isola o texto da área e profundidade escolhida
+        bloco_busca = texto_completo.split(escolha)[-1]
+        
+        # 3. Função "Caçadora" de números
+        def capturar(label, texto):
+            # Procura a palavra e pega o primeiro número com vírgula ou ponto depois dela
+            padrao = label + r".*?(\d+[.,]?\d*)"
+            match = re.search(padrao, texto, re.IGNORECASE)
+            if match:
+                return float(match.group(1).replace(",", "."))
+            return 0.0
 
-    # Pega o texto referente à área escolhida
-    bloco = texto_total.split(area_selecionada)[-1]
-    dados_finais = {
-        "p": extrair(r"F[oó]sforo", bloco),
-        "k": extrair(r"Pot[aá]ssio", bloco),
-        "arg": extrair(r"Argila", bloco),
-        "v": extrair(r"V%", bloco),
-        "ctc": extrair(r"CTC", bloco)
-    }
-    st.sidebar.success(f"✅ {area_selecionada} carregada!")
+        val["p"] = capturar(r"F[oó]sforo", bloco_busca)
+        val["k"] = capturar(r"Pot[aá]ssio", bloco_busca)
+        val["arg"] = capturar(r"Argila", bloco_busca)
+        val["v"] = capturar(r"V%", bloco_busca)
+        val["ctc"] = capturar(r"CTC", bloco_busca)
+        
+        st.sidebar.success(f"✅ Dados de {escolha} extraídos!")
+    except Exception as e:
+        st.sidebar.error(f"Erro na leitura: {e}")
 
-# --- 2. PAINEL DE DADOS ---
-st.header("1️⃣ Dados do Solo")
+# --- 2. EXIBIÇÃO DOS DADOS (Onde os dados extraídos aparecem) ---
+st.header("1️⃣ Resultados da Análise de Solo")
 c1, c2, c3 = st.columns(3)
 with c1:
-    p_solo = st.number_input("Fósforo (mg/dm³):", value=dados_finais["p"])
-    k_solo = st.number_input("Potássio (cmolc/dm³):", value=dados_finais["k"])
+    p_solo = st.number_input("Fósforo (mg/dm³):", value=val["p"])
+    k_solo = st.number_input("Potássio (cmolc/dm³):", value=val["k"])
 with c2:
-    argila = st.number_input("Argila (%):", value=dados_finais["arg"])
-    v_atual = st.number_input("V% Atual:", value=dados_finais["v"])
+    argila = st.number_input("Argila (%):", value=val["arg"])
+    v_atual = st.number_input("V% Atual:", value=val["v"])
 with c3:
-    ctc = st.number_input("CTC Total:", value=dados_finais["ctc"])
+    ctc = st.number_input("CTC Total:", value=val["ctc"])
     prnt = st.number_input("PRNT do Calcário (%):", value=80.0)
 
-# --- 3. CALAGEM (ADICIONADO) ---
-st.header("2️⃣ Necessidade de Calagem")
-col_cal1, col_cal2 = st.columns(2)
-area_total = st.sidebar.number_input("Área (ha):", value=1.0)
+# --- 3. CÁLCULO DE CALAGEM ---
+st.header("2️⃣ Recomendação de Calagem")
 cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
+area_ha = st.sidebar.number_input("Área (ha):", value=1.0)
 
 v_alvo = 70.0 if cultura == "Soja" else 60.0
 nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt) if prnt > 0 else 0.0
-calc_total = nc * area_total
+total_calcario = nc * area_ha
 
-with col_cal1:
-    st.metric("Necessidade (t/ha)", f"{nc:.2f}")
-with col_cal2:
-    st.metric("Total para a Área (t)", f"{calc_total:.2f}")
+col_res1, col_res2 = st.columns(2)
+col_res1.metric("Necessidade (t/ha)", f"{nc:.2f}")
+col_res2.metric("Total para a Área (t)", f"{total_calcario:.2f}")
 
-# --- 4. ADUBAÇÃO ---
-st.header("3️⃣ Planejamento NPK")
+# --- 4. ADUBAÇÃO NPK ---
+st.header("3️⃣ Planejamento de Adubação")
+niveis = ["Muito Baixo", "Baixo", "Médio", "Alto"]
 i1, i2, i3 = st.columns(3)
-n_nv = i1.selectbox("Nível N:", ["Baixo", "Médio", "Alto"], index=1)
-p_nv = i2.selectbox("Nível P:", ["Muito Baixo", "Baixo", "Médio", "Alto"], index=1)
-k_nv = i3.selectbox("Nível K:", ["Baixo", "Médio", "Alto"], index=1)
+n_nv = i1.selectbox("Nível N:", niveis, index=1)
+p_nv = i2.selectbox("Nível P:", niveis, index=1)
+k_nv = i3.selectbox("Nível K:", niveis, index=1)
 
-# Tabelas Simplificadas
+# Lógica de Recomendação Simplificada
 if cultura == "Soja":
     req_p = {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 60}[p_nv]
     req_n, req_k = 0, 80
@@ -98,31 +103,36 @@ else:
     req_p = {"Muito Baixo": 140, "Baixo": 120, "Médio": 90, "Alto": 60}[p_nv]
     req_n, req_k = 100, 60
 
-st.info(f"Recomendação: {req_n}N - {req_p}P - {req_k}K")
-
-# Cálculo do Adubo
+# Escolha do Adubo
+st.subheader("Cálculo do Formulado")
 f1, f2, f3, f4 = st.columns(4)
 f_p = f2.number_input("P na Fórmula (%)", value=14.0)
-nome_f = f4.text_input("Fórmula:", "04-14-08")
+nome_f = f4.text_input("Fórmula Comercial:", "04-14-08")
 
 if f_p > 0:
     dose = (req_p * 100) / f_p
-    sacos = math.ceil((dose * area_total) / 50)
-    st.success(f"🚀 Aplicar {dose:.0f} kg/ha | Total: {sacos} sacos.")
+    sacos = math.ceil((dose * area_ha) / 50)
+    st.success(f"🎯 Aplicar {dose:.0f} kg/ha de {nome_f} | Total: {sacos} sacos.")
 
-# --- 5. PDF ---
-def gerar_laudo():
+# --- 5. GERAÇÃO DE PDF ---
+def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     def cl(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 10, cl("LAUDO AGRONÔMICO - FELIPE AMORIM"), ln=True, align="C")
-    pdf.set_font("Arial", "", 12)
+    pdf.cell(190, 10, cl("LAUDO TÉCNICO - FELIPE AMORIM"), ln=True, align="C")
     pdf.ln(10)
-    pdf.cell(0, 10, cl(f"Cultura: {cultura} | Área: {area_total} ha"), ln=True)
-    pdf.cell(0, 10, cl(f"Calagem: {nc:.2f} t/ha"), ln=True)
-    pdf.cell(0, 10, cl(f"Adubação: {dose:.0f} kg/ha de {nome_f}"), ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 10, cl(f"Cultura: {cultura} | Área: {area_ha} ha"), ln=True)
+    pdf.cell(0, 10, cl(f"Calagem Sugerida: {nc:.2f} t/ha"), ln=True)
+    pdf.cell(0, 10, cl(f"Adubação Sugerida: {dose:.0f} kg/ha de {nome_f}"), ln=True)
     return pdf.output(dest='S')
 
-if st.button("📄 Baixar Relatório"):
-    st.download_button("Clique aqui para baixar", gerar_laudo(), "Relatorio.pdf", "application/pdf")
+if st.button("📄 Gerar e Baixar Laudo"):
+    try:
+        pdf_out = gerar_pdf()
+        st.download_button("⬇️ Clique para Baixar PDF", pdf_out, "Laudo_Felipe_Amorim.pdf", "application/pdf")
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {e}")
+
+st.caption("AgroCalc Pro | Sistema desenvolvido para Felipe Amorim")
