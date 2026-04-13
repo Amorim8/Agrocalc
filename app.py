@@ -4,6 +4,13 @@ import math
 import re
 from datetime import datetime
 
+# --- TENTATIVA SEGURA DE IMPORTAR LEITOR DE PDF ---
+try:
+    from PyPDF2 import PdfReader
+    PDF_READY = True
+except ImportError:
+    PDF_READY = False
+
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="AgroCalc Pro - Felipe Amorim", layout="wide")
 
@@ -12,87 +19,111 @@ st.subheader("Consultor: Felipe Amorim")
 
 # --- SIDEBAR ---
 st.sidebar.header("📋 Dados da Área")
-produtor = st.sidebar.text_input("Produtor:", "Cliente")
-talhao = st.sidebar.text_input("Talhão:", "Gleba 01")
+produtor = st.sidebar.text_input("Nome do Produtor:", "Cesário")
+talhao = st.sidebar.text_input("Talhão/Gleba:", "Gleba 01")
 area_ha = st.sidebar.number_input("Área Total (ha):", min_value=0.01, value=1.0)
-cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
+cultura = st.sidebar.selectbox("Cultura de Destino:", ["Soja", "Milho"])
 
-# --- 1. ANÁLISE DE SOLO ---
-st.header("1️⃣ Análise de Solo")
+# --- SISTEMA DE UPLOAD ---
+st.sidebar.subheader("📄 Importar Análise")
+arquivo_pdf = st.sidebar.file_uploader("Subir PDF da Análise", type=["pdf"])
+
+def extrair_dados_pdf(pdf):
+    try:
+        reader = PdfReader(pdf)
+        texto = ""
+        for page in reader.pages:
+            texto += page.extract_text()
+        
+        def buscar(reg):
+            match = re.search(reg, texto, re.IGNORECASE)
+            return float(match.group(1).replace(",", ".")) if match else 0.0
+
+        return {
+            "p": buscar(r"F[oó]sforo.*?(\d+[.,]?\d*)"),
+            "k": buscar(r"Pot[aá]ssio.*?(\d+[.,]?\d*)"),
+            "argila": buscar(r"Argila.*?(\d+[.,]?\d*)"),
+            "v": buscar(r"V%.*?(\d+[.,]?\d*)"),
+            "ctc": buscar(r"CTC.*?(\d+[.,]?\d*)")
+        }
+    except:
+        return None
+
+# Valores Iniciais
+p_ini, k_ini, arg_ini, v_ini, ctc_ini = 0.0, 0.0, 0.0, 0.0, 5.0
+
+if arquivo_pdf:
+    if PDF_READY:
+        dados = extrair_dados_pdf(arquivo_pdf)
+        if dados:
+            st.sidebar.success("✅ Dados extraídos do PDF!")
+            p_ini, k_ini, arg_ini, v_ini, ctc_ini = dados.values()
+    else:
+        st.sidebar.error("⚠️ Biblioteca 'PyPDF2' não instalada. Preencha os campos manualmente abaixo.")
+
+# --- 1. ENTRADA DE DADOS ---
+st.header("1️⃣ Dados da Análise")
 col1, col2, col3 = st.columns(3)
 with col1:
-    p_solo = st.number_input("Fósforo (mg/dm³):", value=0.0)
-    k_solo = st.number_input("Potássio (cmolc/dm³):", value=0.0)
+    p_solo = st.number_input("Fósforo (mg/dm³):", value=p_ini)
+    k_solo = st.number_input("Potássio (cmolc/dm³):", value=k_ini)
 with col2:
-    v_atual = st.number_input("V% Atual:", value=0.0)
-    ctc = st.number_input("CTC Total:", value=5.0)
+    v_atual = st.number_input("V% Atual:", value=v_ini)
+    ctc = st.number_input("CTC Total:", value=ctc_ini)
 with col3:
     prnt = st.number_input("PRNT do Calcário (%):", value=80.0)
 
-# --- 2. CALAGEM (AUTOMÁTICA) ---
+# --- 2. CALAGEM ---
 st.header("2️⃣ Calagem")
 v_alvo = 70.0 if cultura == "Soja" else 60.0
 nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt) if prnt > 0 else 0.0
 total_calc = nc * area_ha
+st.info(f"👉 Recomendação: {nc:.2f} t/ha | Total Gleba: {total_calc:.2f} toneladas.")
 
-c1, c2 = st.columns(2)
-c1.metric("Calcário (t/ha)", f"{nc:.2f}")
-c2.metric("Total Área (t)", f"{total_calc:.2f}")
-
-# --- 3. INTERPRETAÇÃO PADRONIZADA (TABELAS) ---
-st.header("3️⃣ Interpretação e Recomendação")
-st.write(f"Defina os níveis conforme o manual da **{cultura}**:")
-
+# --- 3. ESCOLHA DE NÍVEIS (N, P, K) ---
+st.header("3️⃣ Interpretação e NPK")
 niveis = ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"]
-int1, int2 = st.columns(2)
+i1, i2, i3 = st.columns(3)
+with i1: n_nivel = i1.selectbox("Nível de Nitrogênio:", niveis, index=2)
+with i2: p_nivel = i2.selectbox("Nível de Fósforo:", niveis, index=2)
+with i3: k_nivel = i3.selectbox("Nível de Potássio:", niveis, index=2)
 
-with int1:
-    nivel_p = st.selectbox("Nível de Fósforo (P):", niveis, index=2)
-with int2:
-    nivel_k = st.selectbox("Nível de Potássio (K):", niveis, index=2)
-
-# Lógica de Recomendação baseada nos manuais (kg/ha de P2O5 e K2O)
+# Tabelas de Recomendação
 if cultura == "Soja":
-    tab_p = {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 60, "Muito Alto": 0}
-    tab_k = {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 50, "Muito Alto": 0}
+    t_n = {"Muito Baixo": 20, "Baixo": 10, "Médio": 0, "Alto": 0, "Muito Alto": 0}
+    t_p = {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 60, "Muito Alto": 0}
+    t_k = {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 50, "Muito Alto": 0}
 else: # Milho
-    tab_p = {"Muito Baixo": 140, "Baixo": 120, "Médio": 90, "Alto": 60, "Muito Alto": 0}
-    tab_k = {"Muito Baixo": 120, "Baixo": 90, "Médio": 60, "Alto": 40, "Muito Alto": 0}
+    t_n = {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 40, "Muito Alto": 0}
+    t_p = {"Muito Baixo": 140, "Baixo": 120, "Médio": 90, "Alto": 60, "Muito Alto": 0}
+    t_k = {"Muito Baixo": 120, "Baixo": 90, "Médio": 60, "Alto": 40, "Muito Alto": 0}
 
-req_p = tab_p[nivel_p]
-req_k = tab_k[nivel_k]
+req_n, req_p, req_k = t_n[n_nivel], t_p[p_nivel], t_k[k_nivel]
+st.success(f"📌 Necessidade: N:{req_n} | P2O5:{req_p} | K2O:{req_k} kg/ha")
 
-st.info(f"📌 Recomendação Técnica: {req_p} kg/ha de P₂O₅ e {req_k} kg/ha de K₂O")
-
-# --- 4. ADUBO FORMULADO ---
+# --- 4. FORMULADO ---
 st.header("4️⃣ Adubo Formulado")
-st.write("Escolha a formulação NPK que será utilizada no plantio:")
+f1, f2, f3, f4 = st.columns(4)
+with f1: f_n = f1.number_input("N (%)", value=4.0)
+with f2: f_p = f2.number_input("P (%)", value=14.0)
+with f3: f_k = f3.number_input("K (%)", value=8.0)
+with f4: nome_f = f4.text_input("Fórmula:", "04-14-08")
 
-f1, f2, f3 = st.columns(3)
-with f1:
-    n_f = st.number_input("N (%)", value=4.0)
-with f2:
-    p_f = st.number_input("P (%)", value=14.0)
-with f3:
-    k_f = st.number_input("K (%)", value=8.0)
-
-# Cálculo da dose baseada no Fósforo (mais comum no plantio)
-if p_f > 0:
-    dose_ha = (req_p * 100) / p_f
-    total_sacos = math.ceil((dose_ha * area_ha) / 50)
-    
-    st.warning(f"🚀 Dose Sugerida: {dose_ha:.0f} kg/ha")
-    st.success(f"📦 Total para a área: {total_sacos} sacos de 50kg")
+if f_p > 0:
+    dose = (req_p * 100) / f_p
+    sacos = math.ceil((dose * area_ha) / 50)
+    st.warning(f"🚀 Dose: {dose:.0f} kg/ha. Total: {sacos} sacos (50kg).")
 else:
-    st.error("A porcentagem de P na fórmula deve ser maior que zero.")
+    dose, sacos = 0, 0
 
 # --- 5. RELATÓRIO PDF ---
+st.header("5️⃣ Gerar Laudo")
+
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
-    def cl(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
+    def cl(text): return str(text).encode('latin-1', 'replace').decode('latin-1')
 
-    # Visual Agronômico
     pdf.set_fill_color(34, 139, 34)
     pdf.rect(0, 0, 210, 40, 'F')
     pdf.set_text_color(255, 255, 255)
@@ -104,20 +135,21 @@ def gerar_pdf():
     pdf.set_text_color(0, 0, 0)
     pdf.ln(20)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, cl(f"Produtor: {cliente} | Talhão: {talhao}"), ln=True)
-    pdf.cell(0, 10, cl(f"Cultura: {cultura} | Área: {area_ha} ha"), ln=True)
+    pdf.cell(0, 10, cl(f"Produtor: {produtor} | Gleba: {talhao}"), ln=True)
+    pdf.cell(0, 10, cl(f"Área: {area_ha} ha | Cultura: {cultura}"), ln=True)
     pdf.ln(5)
-    
-    pdf.cell(0, 10, cl(f"Necessidade de Calcário: {nc:.2f} t/ha"), ln=True)
-    pdf.cell(0, 10, cl(f"Recomendação NPK: {req_p} P / {req_k} K (kg/ha)"), ln=True)
+    pdf.cell(0, 8, cl(f"- Calagem: {nc:.2f} t/ha"), ln=True)
+    pdf.cell(0, 8, cl(f"- Recomendado: {req_n}-{req_p}-{req_k} kg/ha"), ln=True)
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, cl(f"ADUBAÇÃO: {dose_ha:.0f} kg/ha da fórmula {n_f:.0f}-{p_f:.0f}-{k_f:.0f}"), ln=True)
-    pdf.cell(0, 10, cl(f"TOTAL DE SACOS: {total_sacos}"), ln=True)
-
+    pdf.cell(0, 12, cl(f"APLICAR: {dose:.0f} kg/ha de {nome_f}"), ln=True)
+    pdf.cell(0, 12, cl(f"TOTAL: {sacos} sacos de 50kg"), ln=True)
     return pdf.output(dest='S').encode('latin-1')
 
-if st.button("📄 Gerar Relatório Profissional"):
-    pdf_out = gerar_pdf()
-    st.download_button("⬇️ Baixar Relatório", pdf_out, f"Relatorio_{talhao}.pdf", "application/pdf")
+if st.button("📄 Criar Relatório Técnico"):
+    try:
+        pdf_bytes = gerar_pdf()
+        st.download_button("⬇️ Baixar PDF Agora", pdf_bytes, f"Laudo_{talhao}.pdf", "application/pdf")
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {e}")
 
-st.caption("Sistema AgroCalc Pro | Felipe Amorim")
+st.caption("AgroCalc Pro | Felipe Amorim")
