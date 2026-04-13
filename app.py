@@ -6,122 +6,98 @@ from PyPDF2 import PdfReader
 from datetime import datetime
 
 # ---------------- CONFIG ----------------
-st.set_page_config(page_title="Consultoria Agronômica", layout="wide")
+st.set_page_config(page_title="Consultoria Agronômica", layout="wide", page_icon="🌿")
 
 st.title("🌿 Consultoria Agronômica")
-st.subheader("Consultor: Felipe Amorim")
+st.subheader(f"Consultor: Felipe Amorim")
 
 # ---------------- SIDEBAR ----------------
 st.sidebar.header("📋 Informações da Área")
 
-cliente = st.sidebar.text_input("Produtor:", "Cliente")
+cliente = st.sidebar.text_input("Produtor:", "Cliente Padrão")
 talhao = st.sidebar.text_input("Talhão:", "Gleba 01")
-
 area = st.sidebar.number_input("Área (ha):", min_value=0.01, value=1.0, step=0.1)
 cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
 
-# Upload PDF
 st.sidebar.subheader("📄 Upload da Análise de Solo")
-uploaded_file = st.sidebar.file_uploader("Enviar PDF", type=["pdf"])
+uploaded_file = st.sidebar.file_uploader("Enviar PDF da Análise", type=["pdf"])
 
-# ---------------- FUNÇÃO PDF ----------------
+# ---------------- FUNÇÕES ----------------
 def extrair_dados_pdf(file):
-    reader = PdfReader(file)
-    texto = ""
+    try:
+        reader = PdfReader(file)
+        texto = ""
+        for page in reader.pages:
+            content = page.extract_text()
+            if content:
+                texto += content
 
-    for page in reader.pages:
-        texto += page.extract_text()
+        def buscar_valor(padrao):
+            match = re.search(padrao, texto, re.IGNORECASE)
+            if match:
+                # Limpa o valor para converter em float
+                val = match.group(1).replace(",", ".")
+                return float(val)
+            return None
 
-    def buscar_valor(padrao):
-        match = re.search(padrao, texto, re.IGNORECASE)
-        return float(match.group(1).replace(",", ".")) if match else None
+        return {
+            "p": buscar_valor(r"F[oó]sforo.*?(\d+[.,]?\d*)"),
+            "k": buscar_valor(r"Pot[aá]ssio.*?(\d+[.,]?\d*)"),
+            "argila": buscar_valor(r"Argila.*?(\d+[.,]?\d*)"),
+            "v": buscar_valor(r"V%.*?(\d+[.,]?\d*)"),
+            "ctc": buscar_valor(r"CTC.*?(\d+[.,]?\d*)"),
+        }
+    except Exception as e:
+        st.error(f"Erro ao ler PDF: {e}")
+        return None
 
-    return {
-        "p": buscar_valor(r"F[oó]sforo.*?(\d+[.,]?\d*)"),
-        "k": buscar_valor(r"Pot[aá]ssio.*?(\d+[.,]?\d*)"),
-        "argila": buscar_valor(r"Argila.*?(\d+[.,]?\d*)"),
-        "v": buscar_valor(r"V%.*?(\d+[.,]?\d*)"),
-        "ctc": buscar_valor(r"CTC.*?(\d+[.,]?\d*)"),
-    }
+# Valores Iniciais
+p_val, k_val, argila_val, v_atual_val, ctc_val = 0.0, 0.0, 0.0, 0.0, 5.0
 
-# ---------------- VALORES PADRÃO ----------------
-p = 0.0
-k = 0.0
-argila = 0.0
-v_atual = 0.0
-ctc = 5.0
+if uploaded_file:
+    dados = extrair_dados_pdf(uploaded_file)
+    if dados:
+        st.success("✅ Dados carregados com sucesso!")
+        p_val = dados["p"] or 0.0
+        k_val = dados["k"] or 0.0
+        argila_val = dados["argila"] or 0.0
+        v_atual_val = dados["v"] or 0.0
+        ctc_val = dados["ctc"] or 5.0
 
-# ---------------- AUTO PREENCHIMENTO ----------------
-if uploaded_file is not None:
-    dados_pdf = extrair_dados_pdf(uploaded_file)
+# ---------------- 1. ANÁLISE QUÍMICA ----------------
+st.header("1️⃣ Análise de Solo")
+c1, c2, c3 = st.columns(3)
 
-    if dados_pdf:
-        st.success("✅ Dados da análise carregados automaticamente!")
+with c1:
+    p = st.number_input("Fósforo (mg/dm³)", value=p_val)
+    k = st.number_input("Potássio (cmolc/dm³)", value=k_val)
+with c2:
+    argila = st.number_input("Argila (%)", value=argila_val)
+    v_atual = st.number_input("V% Atual", value=v_atual_val)
+with c3:
+    ctc = st.number_input("CTC (T)", value=ctc_val)
+    prnt = st.number_input("PRNT do Calcário (%)", value=80.0)
 
-        if dados_pdf["p"]: p = dados_pdf["p"]
-        if dados_pdf["k"]: k = dados_pdf["k"]
-        if dados_pdf["argila"]: argila = dados_pdf["argila"]
-        if dados_pdf["v"]: v_atual = dados_pdf["v"]
-        if dados_pdf["ctc"]: ctc = dados_pdf["ctc"]
-
-# ---------------- ANÁLISE DO SOLO ----------------
-st.header("1️⃣ Análise de Solo (Química)")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    p = st.number_input("Fósforo (mg/dm³)", value=p)
-    k = st.number_input("Potássio (cmolc/dm³)", value=k)
-
-with col2:
-    argila = st.number_input("Argila", value=argila)
-    v_atual = st.number_input("V% Atual", value=v_atual)
-
-with col3:
-    ctc = st.number_input("CTC", value=ctc)
-    prnt = st.number_input("PRNT (%)", value=80.0)
-
-# ---------------- CALAGEM ----------------
-st.header("2️⃣ Calagem")
+# ---------------- 2. CALAGEM ----------------
+st.divider()
+st.header("2️⃣ Recomendação de Calagem")
 
 v_alvo = 70 if cultura == "Soja" else 60
-
-if v_atual >= v_alvo:
-    nc = 0
-    obs_calagem = "Não é necessário realizar calagem."
-else:
-    nc = ((v_alvo - v_atual) * ctc) / 100
-    nc = nc / (prnt / 100) if prnt > 0 else 0
-    obs_calagem = "Realizar calagem conforme recomendação."
-
+nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt) if prnt > 0 else 0
 total_calc = nc * area
 
-colc1, colc2 = st.columns(2)
-colc1.metric("Calcário (t/ha)", f"{nc:.2f}")
-colc2.metric("Total (t)", f"{total_calc:.2f}")
+colc1, colc2, colc3 = st.columns(3)
+colc1.metric("Necessidade (t/ha)", f"{nc:.2f}")
+colc2.metric("Total para Área (t)", f"{total_calc:.2f}")
+colc3.info(f"V% Alvo para {cultura}: {v_alvo}%")
 
-st.info(obs_calagem)
+# ---------------- 3. ADUBAÇÃO ----------------
+st.divider()
+st.header("3️⃣ Recomendação de NPK")
 
-# ---------------- INTERPRETAÇÃO ----------------
-st.header("3️⃣ Interpretação do Solo")
-
-niveis = ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"]
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    nivel_n = st.selectbox("Nitrogênio", niveis)
-
-with col2:
-    nivel_p = st.selectbox("Fósforo", niveis)
-
-with col3:
-    nivel_k = st.selectbox("Potássio", niveis)
-
-# ---------------- TABELA ----------------
 tabela = {
     "Soja": {
-        "N": {n: 0 for n in niveis},
+        "N": {"Muito Baixo": 0, "Baixo": 0, "Médio": 0, "Alto": 0, "Muito Alto": 0},
         "P": {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 50, "Muito Alto": 30},
         "K": {"Muito Baixo": 100, "Baixo": 90, "Médio": 70, "Alto": 50, "Muito Alto": 30}
     },
@@ -132,65 +108,78 @@ tabela = {
     }
 }
 
-req_n = tabela[cultura]["N"][nivel_n]
-req_p = tabela[cultura]["P"][nivel_p]
-req_k = tabela[cultura]["K"][nivel_k]
+niveis = ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"]
+i1, i2, i3 = st.columns(3)
+n_nv = i1.selectbox("Nível N", niveis, index=2)
+p_nv = i2.selectbox("Nível P", niveis, index=2)
+k_nv = i3.selectbox("Nível K", niveis, index=2)
 
-obs_n = "Nitrogênio dispensado." if cultura == "Soja" else "Aplicar nitrogênio."
+req_n = tabela[cultura]["N"][n_nv]
+req_p = tabela[cultura]["P"][p_nv]
+req_k = tabela[cultura]["K"][k_nv]
 
-st.success(f"N: {req_n} | P₂O₅: {req_p} | K₂O: {req_k} kg/ha")
-st.warning(obs_n)
+st.subheader(f"Dose Alvo: N:{req_n} | P₂O₅:{req_p} | K₂O:{req_k} kg/ha")
 
-# ---------------- ADUBO ----------------
-st.header("4️⃣ Adubo Formulado")
-
-col1, col2, col3 = st.columns(3)
-
-f_n = col1.number_input("N (%)", 0)
-f_p = col2.number_input("P (%)", 20)
-f_k = col3.number_input("K (%)", 20)
-
-dose = 0
-sacos = 0
+# Formulado
+st.write("---")
+st.write("**Cálculo do Adubo Formulado**")
+f1, f2, f3 = st.columns(3)
+f_n = f1.number_input("% N (Adubo)", value=0)
+f_p = f2.number_input("% P₂O₅ (Adubo)", value=20)
+f_k = f3.number_input("% K₂O (Adubo)", value=20)
 
 if f_p > 0:
-    dose = (req_p / f_p) * 100
-    total_adubo = dose * area
-    sacos = math.ceil(total_adubo / 50)
+    dose_ha = (req_p / f_p) * 100
+    total_quilos = dose_ha * area
+    sacos = math.ceil(total_quilos / 50)
+    
+    st.success(f"Dose Recomendada: **{dose_ha:.0f} kg/ha**")
+    st.metric("Total de Sacos (50kg)", sacos)
 
-    st.success(f"Dose: {dose:.0f} kg/ha | Total: {sacos} sacos")
-
-# ---------------- PDF ----------------
-st.header("5️⃣ Relatório")
-
+# ---------------- 4. PDF ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
+    
+    def t(texto_str): return str(texto_str).encode('latin-1', 'replace').decode('latin-1')
 
-    def txt(t):
-        return str(t).encode('latin-1', 'replace').decode('latin-1')
-
-    data = datetime.now().strftime("%d/%m/%Y")
-
-    pdf.set_font("Arial","B",14)
-    pdf.cell(190,10, txt("CONSULTORIA AGRONÔMICA"), ln=True, align="C")
-
-    pdf.set_font("Arial","",11)
-    pdf.cell(190,8, txt(f"Felipe Amorim - {data}"), ln=True, align="C")
-
+    # Cabeçalho
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 10, t("RELATÓRIO DE RECOMENDAÇÃO AGRONÔMICA"), ln=True, align="C")
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(190, 8, t(f"Consultor: Felipe Amorim | Data: {datetime.now().strftime('%d/%m/%Y')}"), ln=True, align="C")
     pdf.ln(10)
 
-    pdf.cell(190,8, txt(f"Produtor: {cliente}"), ln=True)
-    pdf.cell(190,8, txt(f"Talhão: {talhao}"), ln=True)
-    pdf.cell(190,8, txt(f"Área: {area} ha"), ln=True)
-    pdf.cell(190,8, txt(f"Cultura: {cultura}"), ln=True)
-
+    # Dados do Cliente
+    pdf.set_fill_color(230, 230, 230)
+    pdf.cell(190, 8, t(" DADOS DA ÁREA"), ln=True, fill=True)
+    pdf.cell(95, 8, t(f"Produtor: {cliente}"))
+    pdf.cell(95, 8, t(f"Talhão: {talhao}"), ln=True)
+    pdf.cell(95, 8, t(f"Á : {area} ha"))
+    pdf.cell(95, 8, t(f"Cultura: {cultura}"), ln=True)
     pdf.ln(5)
 
-    pdf.cell(190,8, txt(f"P₂O₅: {req_p} kg/ha"), ln=True)
-    pdf.cell(190,8, txt(f"K₂O: {req_k} kg/ha"), ln=True)
+    # Calagem
+    pdf.cell(190, 8, t(" RECOMENDAÇÃO DE CALAGEM"), ln=True, fill=True)
+    pdf.cell(190, 8, t(f"Necessidade de Calcário: {nc:.2f} t/ha"), ln=True)
+    pdf.cell(190, 8, t(f"Total para a área: {total_calc:.2f} toneladas"), ln=True)
+    pdf.ln(5)
 
-    return bytes(pdf.output(dest='S'))
+    # Adubação
+    pdf.cell(190, 8, t(" RECOMENDAÇÃO DE ADUBAÇÃO"), ln=True, fill=True)
+    pdf.cell(190, 8, t(f"Dose Alvo NPK: {req_n}-{req_p}-{req_k} kg/ha"), ln=True)
+    if f_p > 0:
+        pdf.cell(190, 8, t(f"Formulado Utilizado: {f_n}-{f_p}-{f_k}"), ln=True)
+        pdf.cell(190, 8, t(f"Quantidade: {dose_ha:.0f} kg/ha (Total: {sacos} sacos)"), ln=True)
 
-if st.button("📄 Gerar PDF"):
-    st.download_button("⬇️ Baixar Relatório", gerar_pdf(), file_name="relatorio.pdf")
+    return pdf.output(dest='S').encode('latin-1')
+
+st.divider()
+if st.button("📊 Finalizar e Gerar Relatório"):
+    pdf_bytes = gerar_pdf()
+    st.download_button(
+        label="⬇️ Baixar PDF",
+        data=pdf_bytes,
+        file_name=f"Recomendacao_{cliente}_{talhao}.pdf",
+        mime="application/pdf"
+    )
