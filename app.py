@@ -130,14 +130,8 @@ def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
 
-    # Função interna para tratar caracteres especiais/latin-1
     def txt(t):
         return str(t).encode('latin-1', 'replace').decode('latin-1')
 
-    # Fundo
-    pdf.set_fill_color(230,255,230)
-    pdf.rect(0,0,210,297,'F')
-
-    # Cabeçalho
-    pdf.set_fill_color(34,139,34)
-    pdf
+    # Estilização básica
+    pdf.set_fill_color(230,255,23
