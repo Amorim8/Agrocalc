@@ -71,10 +71,8 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     nivel_n = st.selectbox("Nitrogênio", niveis)
-
 with col2:
     nivel_p = st.selectbox("Fósforo", niveis)
-
 with col3:
     nivel_k = st.selectbox("Potássio", niveis)
 
@@ -87,38 +85,4 @@ tabela = {
     },
     "Milho": {
         "N": {"Muito Baixo": 140, "Baixo": 120, "Médio": 90, "Alto": 60, "Muito Alto": 40},
-        "P": {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 60, "Muito Alto": 40},
-        "K": {"Muito Baixo": 100, "Baixo": 90, "Médio": 70, "Alto": 60, "Muito Alto": 40}
-    }
-}
-
-req_n = tabela[cultura]["N"][nivel_n]
-req_p = tabela[cultura]["P"][nivel_p]
-req_k = tabela[cultura]["K"][nivel_k]
-
-# Nitrogênio
-if cultura == "Soja":
-    obs_n = "Nitrogênio dispensado. Focar na inoculação."
-else:
-    obs_n = "Aplicar nitrogênio conforme recomendação."
-
-st.success(f"N: {req_n} | P: {req_p} | K: {req_k} kg/ha")
-st.warning(obs_n)
-
-# ---------------- ADUBO FORMULADO ----------------
-st.header("4️⃣ Adubo Formulado")
-
-col1, col2, col3 = st.columns(3)
-
-f_n = col1.number_input("N (%)", 0)
-f_p = col2.number_input("P (%)", 20)
-f_k = col3.number_input("K (%)", 20)
-
-dose = 0
-sacos = 0
-
-if f_p > 0:
-    dose = (req_p / f_p) * 100
-    total_adubo = dose * area
-    sacos = math.ceil(total_adubo / 50)
-    st.success(f"Dose: {dose:.0f} kg/ha | Total: {sacos} sac
+        "P": {"Muito Baixo": 12
