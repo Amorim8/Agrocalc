@@ -2,6 +2,7 @@ import streamlit as st
 from fpdf import FPDF
 import math
 import pandas as pd
+import pdfplumber
 
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Consultoria Agronômica", layout="wide")
@@ -15,60 +16,81 @@ st.sidebar.header("📋 Informações da Área")
 cliente = st.sidebar.text_input("Produtor:", "Cliente")
 talhao = st.sidebar.text_input("Talhão:", "Gleba 01")
 
-area = st.sidebar.number_input(
-    "Área (ha):",
-    min_value=0.01,
-    value=1.0,
-    step=0.1
-)
-
+area = st.sidebar.number_input("Área (ha):", min_value=0.01, value=1.0, step=0.1)
 cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
 
-# V% automático
 v_alvo = 70 if cultura == "Soja" else 60
 
-# ---------------- UPLOAD DE ANÁLISE ----------------
+# ---------------- UPLOAD ----------------
 st.header("📂 Upload da Análise de Solo")
 
-arquivo = st.file_uploader("Envie Excel ou CSV", type=["xlsx", "csv"])
+arquivo = st.file_uploader("Envie PDF, Excel ou CSV", type=["pdf", "xlsx", "csv"])
 
 dados = None
+linha = None
+
+def extrair_pdf(uploaded):
+    texto = ""
+    with pdfplumber.open(uploaded) as pdf:
+        for pagina in pdf.pages:
+            texto += pagina.extract_text() + "\n"
+    return texto.lower()
 
 if arquivo:
     try:
         if arquivo.name.endswith(".xlsx"):
             dados = pd.read_excel(arquivo)
-        else:
+
+        elif arquivo.name.endswith(".csv"):
             dados = pd.read_csv(arquivo)
 
-        st.success("Arquivo carregado com sucesso!")
+        elif arquivo.name.endswith(".pdf"):
+            texto = extrair_pdf(arquivo)
 
-        st.write("Pré-visualização:")
-        st.dataframe(dados)
+            # Extração simples (ajustável)
+            import re
+            p_val = re.findall(r"p\s*=?\s*(\d+[,\.]?\d*)", texto)
+            k_val = re.findall(r"k\s*=?\s*(\d+[,\.]?\d*)", texto)
+            v_val = re.findall(r"v%?\s*=?\s*(\d+[,\.]?\d*)", texto)
+            arg_val = re.findall(r"argila\s*=?\s*(\d+[,\.]?\d*)", texto)
 
-        # Seleção de amostra
-        colunas = dados.columns.tolist()
-        coluna_amostra = st.selectbox("Coluna que identifica amostra:", colunas)
+            linha = {
+                "p": float(p_val[0].replace(",", ".")) if p_val else 0,
+                "k": float(k_val[0].replace(",", ".")) if k_val else 0,
+                "v": float(v_val[0].replace(",", ".")) if v_val else 0,
+                "argila": float(arg_val[0].replace(",", ".")) if arg_val else 0
+            }
 
-        amostras = dados[coluna_amostra].astype(str).unique()
-        amostra_escolhida = st.selectbox("Escolha a amostra:", amostras)
+            st.success("PDF lido automaticamente!")
 
-        linha = dados[dados[coluna_amostra] == amostra_escolhida].iloc[0]
+        if dados is not None:
+            st.success("Arquivo carregado!")
+            st.dataframe(dados)
+
+            coluna = st.selectbox("Coluna da amostra:", dados.columns)
+
+            amostras = dados[coluna].astype(str).unique()
+            escolha = st.selectbox("Escolha a amostra:", amostras)
+
+            linha = dados[dados[coluna] == escolha].iloc[0]
 
     except:
-        st.error("Erro ao ler arquivo")
+        st.error("Erro ao processar arquivo")
 
-# ---------------- ANÁLISE DO SOLO ----------------
-st.header("1️⃣ Análise de Solo (Manual ou Automática)")
-
-col1, col2, col3 = st.columns(3)
-
+# ---------------- FUNÇÃO AUTO ----------------
 def get_val(nome, default=0.0):
-    if dados is not None:
-        for col in dados.columns:
+    if linha is not None:
+        if isinstance(linha, dict):
+            return linha.get(nome, default)
+        for col in linha.index:
             if nome.lower() in col.lower():
                 return float(linha[col])
     return default
+
+# ---------------- ANÁLISE ----------------
+st.header("1️⃣ Análise de Solo")
+
+col1, col2, col3 = st.columns(3)
 
 with col1:
     p = st.number_input("Fósforo (mg/dm³)", value=get_val("p"))
@@ -91,7 +113,7 @@ if v_atual >= v_alvo:
 else:
     nc = ((v_alvo - v_atual) * ctc) / 100
     nc = nc / (prnt / 100) if prnt > 0 else 0
-    obs_calagem = "Realizar calagem conforme recomendação técnica."
+    obs_calagem = "Realizar calagem conforme recomendação."
 
 total_calc = nc * area
 
@@ -108,14 +130,9 @@ niveis = ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"]
 
 col1, col2, col3 = st.columns(3)
 
-with col1:
-    nivel_n = st.selectbox("Nitrogênio", niveis)
-
-with col2:
-    nivel_p = st.selectbox("Fósforo", niveis)
-
-with col3:
-    nivel_k = st.selectbox("Potássio", niveis)
+nivel_n = col1.selectbox("Nitrogênio", niveis)
+nivel_p = col2.selectbox("Fósforo", niveis)
+nivel_k = col3.selectbox("Potássio", niveis)
 
 # ---------------- TABELA ----------------
 tabela = {
@@ -135,10 +152,7 @@ req_n = tabela[cultura]["N"][nivel_n]
 req_p = tabela[cultura]["P"][nivel_p]
 req_k = tabela[cultura]["K"][nivel_k]
 
-if cultura == "Soja":
-    obs_n = "Nitrogênio dispensado. Focar na inoculação."
-else:
-    obs_n = "Aplicar nitrogênio conforme recomendação."
+obs_n = "Nitrogênio dispensado. Focar na inoculação." if cultura == "Soja" else "Aplicar nitrogênio."
 
 st.success(f"N: {req_n} | P2O5: {req_p} | K2O: {req_k} kg/ha")
 st.warning(obs_n)
