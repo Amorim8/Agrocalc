@@ -1,6 +1,6 @@
 import streamlit as st
 from fpdf import FPDF
-import pandas as pd
+import fitz
 import math
 
 # ---------------- CONFIG ----------------
@@ -14,46 +14,65 @@ st.sidebar.header("📋 Informações da Área")
 
 cliente = st.sidebar.text_input("Produtor:", "Cliente")
 talhao = st.sidebar.text_input("Talhão:", "Gleba 01")
-
-area = st.sidebar.number_input(
-    "Área (ha):",
-    min_value=0.01,
-    value=1.0,
-    step=0.1
-)
+area = st.sidebar.number_input("Área (ha):", 0.01, 1000.0, 1.0)
 
 cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
-
 v_alvo = 70 if cultura == "Soja" else 60
 
-# ---------------- UPLOAD ----------------
-st.header("📂 Upload da Análise de Solo")
+# ---------------- UPLOAD PDF ----------------
+st.header("📂 Upload da Análise de Solo (PDF)")
 
-arquivo = st.file_uploader("Envie arquivo Excel (.xlsx)", type=["xlsx"])
+arquivo = st.file_uploader("Envie PDF da análise", type=["pdf"])
+
+p = k = v_atual = argila = 0
 
 if arquivo:
-    df = pd.read_excel(arquivo)
+    pdf = fitz.open(stream=arquivo.read(), filetype="pdf")
 
-    st.write("📊 Dados encontrados:")
-    st.dataframe(df)
+    texto = ""
+    for page in pdf:
+        texto += page.get_text()
 
-    amostra_col = df.columns[0]
+    linhas = texto.split("\n")
 
-    amostra = st.selectbox("Escolha a amostra:", df[amostra_col].unique())
+    # Filtrar linhas que começam com número (amostras)
+    amostras = [l for l in linhas if l.strip().startswith(tuple("0123456789"))]
 
-    linha = df[df[amostra_col] == amostra].iloc[0]
+    nomes = []
+    dados = {}
 
-    p = float(linha.get("P", 0))
-    k = float(linha.get("K", 0))
-    argila = float(linha.get("Argila", 0))
-    v_atual = float(linha.get("V%", 0))
+    for linha in amostras:
+        partes = linha.split()
 
-    st.success("Dados carregados automaticamente!")
+        if len(partes) > 10:
+            codigo = partes[0]
+            nome = " ".join(partes[1:4])
 
-else:
-    st.header("1️⃣ Análise de Solo (Manual)")
+            nomes.append(f"{codigo} - {nome}")
+            dados[f"{codigo} - {nome}"] = partes
 
-    col1, col2, col3 = st.columns(3)
+    escolha = st.selectbox("Escolha a amostra:", nomes)
+
+    if escolha:
+        dados_linha = dados[escolha]
+
+        try:
+            # POSIÇÕES BASEADAS NO SEU PDF
+            p = float(dados_linha[10])   # P mg/dm³
+            k = float(dados_linha[6])    # K cmolc/dm³
+            v_atual = float(dados_linha[9])  # V%
+            argila = float(dados_linha[-1])  # argila (última coluna)
+
+            st.success("Dados extraídos automaticamente!")
+
+        except:
+            st.error("Erro ao ler os dados. PDF pode ter formato diferente.")
+
+# ---------------- MANUAL (fallback) ----------------
+if p == 0 and arquivo is None:
+    st.header("1️⃣ Inserção Manual")
+
+    col1, col2 = st.columns(2)
 
     with col1:
         p = st.number_input("Fósforo (mg/dm³)", 0.0)
@@ -63,133 +82,69 @@ else:
         argila = st.number_input("Argila", 0.0)
         v_atual = st.number_input("V% Atual", 0.0)
 
-    with col3:
-        ctc = st.number_input("CTC", 5.0)
-        prnt = st.number_input("PRNT (%)", 80.0)
-
-# valores padrão caso venha do Excel
-ctc = 5.0 if 'ctc' not in locals() else ctc
-prnt = 80.0 if 'prnt' not in locals() else prnt
-
 # ---------------- CALAGEM ----------------
 st.header("2️⃣ Calagem")
+
+ctc = 5.0
+prnt = 80.0
 
 if v_atual >= v_alvo:
     nc = 0
     obs_calagem = "Não é necessário realizar calagem. Considerar uso de silício."
 else:
     nc = ((v_alvo - v_atual) * ctc) / 100
-    nc = nc / (prnt / 100) if prnt > 0 else 0
-    obs_calagem = "Realizar calagem conforme recomendação técnica."
+    nc = nc / (prnt / 100)
 
 total_calc = nc * area
 
-colc1, colc2 = st.columns(2)
-colc1.metric("Calcário (t/ha)", f"{nc:.2f}")
-colc2.metric("Total (t)", f"{total_calc:.2f}")
-
-st.info(obs_calagem)
+st.metric("Calcário (t/ha)", f"{nc:.2f}")
+st.metric("Total (t)", f"{total_calc:.2f}")
 
 # ---------------- INTERPRETAÇÃO ----------------
-st.header("3️⃣ Interpretação do Solo")
+st.header("3️⃣ Interpretação")
 
 niveis = ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"]
 
-col1, col2, col3 = st.columns(3)
+nivel_p = st.selectbox("Nível de Fósforo", niveis)
+nivel_k = st.selectbox("Nível de Potássio", niveis)
 
-nivel_n = col1.selectbox("Nitrogênio", niveis)
-nivel_p = col2.selectbox("Fósforo", niveis)
-nivel_k = col3.selectbox("Potássio", niveis)
-
-# ---------------- TABELA ----------------
 tabela = {
     "Soja": {
-        "N": {n: 0 for n in niveis},
-        "P": {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 50, "Muito Alto": 30},
-        "K": {"Muito Baixo": 100, "Baixo": 90, "Médio": 70, "Alto": 50, "Muito Alto": 30}
+        "P": {"Muito Baixo":120,"Baixo":100,"Médio":80,"Alto":50,"Muito Alto":30},
+        "K": {"Muito Baixo":100,"Baixo":90,"Médio":70,"Alto":50,"Muito Alto":30}
     },
     "Milho": {
-        "N": {"Muito Baixo": 140, "Baixo": 120, "Médio": 90, "Alto": 60, "Muito Alto": 40},
-        "P": {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 60, "Muito Alto": 40},
-        "K": {"Muito Baixo": 100, "Baixo": 90, "Médio": 70, "Alto": 60, "Muito Alto": 40}
+        "P": {"Muito Baixo":120,"Baixo":100,"Médio":80,"Alto":60,"Muito Alto":40},
+        "K": {"Muito Baixo":100,"Baixo":90,"Médio":70,"Alto":60,"Muito Alto":40}
     }
 }
 
-req_n = tabela[cultura]["N"][nivel_n]
 req_p = tabela[cultura]["P"][nivel_p]
 req_k = tabela[cultura]["K"][nivel_k]
 
-if cultura == "Soja":
-    obs_n = "Nitrogênio dispensado. Focar na inoculação."
-else:
-    obs_n = "Aplicar nitrogênio conforme recomendação."
-
-st.success(f"N: {req_n} | P2O5: {req_p} | K2O: {req_k} kg/ha")
-st.warning(obs_n)
-
-# ---------------- ADUBO ----------------
-st.header("4️⃣ Adubo Formulado")
-
-f_n = st.number_input("N (%)", 0)
-f_p = st.number_input("P (%)", 20)
-f_k = st.number_input("K (%)", 20)
-
-dose = 0
-sacos = 0
-
-if f_p > 0:
-    dose = (req_p / f_p) * 100
-    total_adubo = dose * area
-    sacos = math.ceil(total_adubo / 50)
-
-    st.success(f"Dose: {dose:.0f} kg/ha | Total: {sacos} sacos")
+st.success(f"P2O5: {req_p} | K2O: {req_k} kg/ha")
 
 # ---------------- PDF ----------------
-st.header("5️⃣ Relatório")
+st.header("4️⃣ Relatório")
 
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
 
     def txt(t):
-        return str(t).encode('latin-1', 'replace').decode('latin-1')
+        return str(t).encode('latin-1','replace').decode('latin-1')
 
-    pdf.set_fill_color(230,255,230)
-    pdf.rect(0,0,210,297,'F')
+    pdf.set_font("Arial","B",16)
+    pdf.cell(0,10, txt("CONSULTORIA AGRONÔMICA"), ln=True)
 
-    pdf.set_fill_color(34,139,34)
-    pdf.rect(0,0,210,35,'F')
+    pdf.set_font("Arial","",12)
+    pdf.cell(0,10, txt(f"Produtor: {cliente}"), ln=True)
 
-    pdf.set_text_color(255,255,255)
-    pdf.set_font("Arial","B",18)
-    pdf.cell(210,15, txt("CONSULTORIA AGRONÔMICA"), align="C")
-
-    pdf.ln(10)
-    pdf.set_font("Arial","B",12)
-    pdf.cell(210,10, txt("Consultor: Felipe Amorim"), align="C")
-
-    pdf.ln(25)
-    pdf.set_text_color(0,0,0)
-
-    pdf.set_font("Arial","",11)
-    pdf.cell(190,8, txt(f"Produtor: {cliente}"), ln=True)
-    pdf.cell(190,8, txt(f"Área: {area} ha"), ln=True)
-
-    pdf.ln(5)
-    pdf.cell(190,8, txt(f"P: {p} | K: {k} | V%: {v_atual}"), ln=True)
-
-    pdf.ln(5)
-    pdf.cell(190,8, txt(f"Calcário: {nc:.2f} t/ha"), ln=True)
-
-    pdf.ln(5)
-    pdf.cell(190,8, txt(f"P2O5: {req_p} | K2O: {req_k}"), ln=True)
-
-    if dose > 0:
-        pdf.cell(190,8, txt(f"Adubo: {f_n}-{f_p}-{f_k}"), ln=True)
-        pdf.cell(190,8, txt(f"Sacos: {sacos}"), ln=True)
+    pdf.cell(0,10, txt(f"P: {p} | K: {k} | V%: {v_atual}"), ln=True)
+    pdf.cell(0,10, txt(f"Calcário: {nc:.2f} t/ha"), ln=True)
+    pdf.cell(0,10, txt(f"P2O5: {req_p} | K2O: {req_k}"), ln=True)
 
     return pdf.output(dest='S').encode('latin-1')
 
 if st.button("📄 Gerar PDF"):
-    pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Baixar", pdf_bytes, file_name="relatorio.pdf")
+    st.download_button("⬇️ Baixar", gerar_pdf(), file_name="relatorio.pdf")
