@@ -1,4 +1,4 @@
 streamlit
 fpdf
 pandas
-pdfplumber
+PyMuPDF
