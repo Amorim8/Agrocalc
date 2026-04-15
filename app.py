@@ -1,6 +1,7 @@
 import streamlit as st
 from fpdf import FPDF
 import math
+from datetime import datetime  # ✅ NOVO
 
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Consultoria Agronômica", layout="wide")
@@ -40,14 +41,12 @@ with col2:
     v_atual = st.number_input("V% Atual", 0.0)
 
 with col3:
-    # ✅ CTC liberado
     ctc = st.number_input("CTC (cmolc/dm³)", min_value=0.0, value=5.0)
     prnt = st.number_input("PRNT (%)", 80.0)
 
 # ---------------- CALAGEM ----------------
 st.header("2️⃣ Calagem")
 
-# ✅ Mensagem corrigida
 if v_atual >= v_alvo:
     nc = 0
     obs_calagem = "Não é necessário realizar calagem, pois a saturação por bases (V%) atual já atende ou supera o valor recomendado para a cultura."
@@ -116,7 +115,6 @@ st.header("4️⃣ Adubo Formulado")
 
 col1, col2, col3 = st.columns(3)
 
-# ✅ Formulação liberada
 f_n = col1.number_input("N (%)", min_value=0.0, value=0.0)
 f_p = col2.number_input("P (%)", min_value=0.0, value=20.0)
 f_k = col3.number_input("K (%)", min_value=0.0, value=20.0)
@@ -124,8 +122,19 @@ f_k = col3.number_input("K (%)", min_value=0.0, value=20.0)
 dose = 0
 sacos = 0
 
+doses = []
+
+if f_n > 0:
+    doses.append((req_n / f_n) * 100)
+
 if f_p > 0:
-    dose = (req_p / f_p) * 100
+    doses.append((req_p / f_p) * 100)
+
+if f_k > 0:
+    doses.append((req_k / f_k) * 100)
+
+if doses:
+    dose = max(doses)
     total_adubo = dose * area
     sacos = math.ceil(total_adubo / 50)
 
@@ -157,6 +166,11 @@ def gerar_pdf():
 
     pdf.ln(25)
     pdf.set_text_color(0,0,0)
+
+    # ✅ DATA NO PDF
+    data_atual = datetime.now().strftime("%d/%m/%Y")
+    pdf.set_font("Arial","",11)
+    pdf.cell(190,8, txt(f"Data: {data_atual}"), ln=True)
 
     pdf.set_fill_color(220,220,220)
     pdf.set_font("Arial","B",12)
