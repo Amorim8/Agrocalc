@@ -1,16 +1,22 @@
 import streamlit as st
 from fpdf import FPDF
 import math
+import os
 from datetime import datetime
 
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Consultoria Agronômica", layout="wide")
 
-# ---------------- LOGO ----------------
-st.image("logo.png", width=120)
+# ---------------- HEADER COM LOGO ----------------
+col1, col2 = st.columns([1, 4])
 
-st.title("🌿 Consultoria Agronômica")
-st.subheader("Consultor: Felipe Amorim")
+with col1:
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=100)
+
+with col2:
+    st.title("🌿 Consultoria Agronômica")
+    st.subheader("Consultor: Felipe Amorim")
 
 # ---------------- SIDEBAR ----------------
 st.sidebar.header("📋 Informações da Área")
@@ -40,7 +46,7 @@ with col1:
     k = st.number_input("Potássio (cmolc/dm³)", 0.0)
 
 with col2:
-    argila = st.number_input("Argila (g/kg ou %)", 0.0)
+    argila = st.number_input("Argila (%)", 0.0)
     v_atual = st.number_input("V% Atual", 0.0)
 
 with col3:
@@ -52,11 +58,11 @@ st.header("2️⃣ Calagem")
 
 if v_atual >= v_alvo:
     nc = 0
-    obs_calagem = "Não é necessário realizar calagem, pois a saturação por bases (V%) atual já está adequada ou acima do nível desejado para a cultura."
+    obs_calagem = "Não é necessário realizar calagem, pois a saturação por bases (V%) do solo já está adequada para a cultura."
 else:
     nc = ((v_alvo - v_atual) * ctc) / 100
     nc = nc / (prnt / 100) if prnt > 0 else 0
-    obs_calagem = "Realizar calagem para elevar a saturação por bases (V%) ao nível adequado da cultura."
+    obs_calagem = "Realizar calagem para elevar a saturação por bases ao nível adequado."
 
 total_calc = nc * area
 
@@ -102,7 +108,7 @@ req_k = tabela[cultura]["K"][nivel_k]
 
 # Nitrogênio
 if cultura == "Soja":
-    obs_n = "Nitrogênio dispensado. Priorizar inoculação com rizóbio."
+    obs_n = "Nitrogênio dispensado. Focar na inoculação."
 else:
     obs_n = "Aplicar nitrogênio conforme recomendação."
 
@@ -138,37 +144,34 @@ def gerar_pdf():
     def txt(t):
         return str(t).encode('latin-1', 'replace').decode('latin-1')
 
-    data = datetime.now().strftime("%d/%m/%Y")
-
-    # Fundo
-    pdf.set_fill_color(230,255,230)
-    pdf.rect(0,0,210,297,'F')
+    data_hoje = datetime.now().strftime("%d/%m/%Y")
 
     # Cabeçalho
     pdf.set_fill_color(34,139,34)
-    pdf.rect(0,0,210,35,'F')
+    pdf.rect(0,0,210,30,'F')
 
     pdf.set_text_color(255,255,255)
-    pdf.set_font("Arial","B",18)
-    pdf.cell(210,15, txt("CONSULTORIA AGRONÔMICA"), align="C")
+    pdf.set_font("Arial","B",16)
+    pdf.cell(210,10, txt("CONSULTORIA AGRONÔMICA"), align="C")
 
-    pdf.ln(10)
-    pdf.set_font("Arial","B",12)
+    pdf.ln(8)
+    pdf.set_font("Arial","",11)
     pdf.cell(210,10, txt("Consultor: Felipe Amorim"), align="C")
 
-    pdf.ln(20)
+    pdf.ln(15)
     pdf.set_text_color(0,0,0)
 
+    # DATA
     pdf.set_font("Arial","",10)
-    pdf.cell(190,8, txt(f"Data: {data}"), ln=True)
+    pdf.cell(190,8, txt(f"Data: {data_hoje}"), ln=True)
 
     # DADOS
-    pdf.set_fill_color(220,220,220)
     pdf.set_font("Arial","B",12)
-    pdf.cell(190,8, txt("DADOS DA ÁREA"), ln=True, fill=True)
+    pdf.cell(190,8, txt("DADOS DA ÁREA"), ln=True)
 
     pdf.set_font("Arial","",11)
     pdf.cell(190,8, txt(f"Produtor: {cliente}"), ln=True)
+    pdf.cell(190,8, txt(f"Talhão: {talhao}"), ln=True)
     pdf.cell(190,8, txt(f"Área: {area} ha"), ln=True)
     pdf.cell(190,8, txt(f"Cultura: {cultura}"), ln=True)
 
@@ -176,24 +179,24 @@ def gerar_pdf():
 
     # ANÁLISE
     pdf.set_font("Arial","B",12)
-    pdf.cell(190,8, txt("ANÁLISE DO SOLO"), ln=True, fill=True)
+    pdf.cell(190,8, txt("ANÁLISE DO SOLO"), ln=True)
 
     pdf.set_font("Arial","",11)
     pdf.cell(190,8, txt(f"Fósforo: {p} mg/dm³"), ln=True)
     pdf.cell(190,8, txt(f"Potássio: {k} cmolc/dm³"), ln=True)
-    pdf.cell(190,8, txt(f"Argila: {argila}"), ln=True)
+    pdf.cell(190,8, txt(f"Argila: {argila}%"), ln=True)
     pdf.cell(190,8, txt(f"V%: {v_atual}"), ln=True)
 
     pdf.ln(5)
 
     # CALAGEM
     pdf.set_font("Arial","B",12)
-    pdf.cell(190,8, txt("CALAGEM"), ln=True, fill=True)
+    pdf.cell(190,8, txt("CALAGEM"), ln=True)
 
     pdf.set_font("Arial","",11)
-    pdf.multi_cell(190,8, txt(obs_calagem))
-
-    if nc > 0:
+    if nc == 0:
+        pdf.multi_cell(190,8, txt(obs_calagem))
+    else:
         pdf.cell(190,8, txt(f"Necessidade: {nc:.2f} t/ha"), ln=True)
         pdf.cell(190,8, txt(f"Total: {total_calc:.2f} t"), ln=True)
 
@@ -201,7 +204,7 @@ def gerar_pdf():
 
     # ADUBAÇÃO
     pdf.set_font("Arial","B",12)
-    pdf.cell(190,8, txt("ADUBAÇÃO"), ln=True, fill=True)
+    pdf.cell(190,8, txt("ADUBAÇÃO"), ln=True)
 
     pdf.set_font("Arial","",11)
     pdf.cell(190,8, txt(f"N: {req_n} kg/ha"), ln=True)
@@ -213,7 +216,7 @@ def gerar_pdf():
     if dose > 0:
         pdf.ln(5)
         pdf.set_font("Arial","B",12)
-        pdf.cell(190,8, txt("ADUBO FORMULADO"), ln=True, fill=True)
+        pdf.cell(190,8, txt("ADUBO FORMULADO"), ln=True)
 
         pdf.set_font("Arial","",11)
         pdf.cell(190,8, txt(f"Fórmula: {f_n}-{f_p}-{f_k}"), ln=True)
@@ -226,7 +229,7 @@ def gerar_pdf():
 if st.button("📄 Gerar PDF"):
     try:
         pdf_bytes = gerar_pdf()
-        st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name="relatorio.pdf")
+        st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name="relatorio_agronomico.pdf")
     except Exception as e:
         st.error(f"Erro ao gerar PDF: {e}")
 
