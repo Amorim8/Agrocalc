@@ -1,7 +1,7 @@
 import streamlit as st
 from fpdf import FPDF
 import math
-from datetime import datetime  # ✅ NOVO
+from datetime import datetime
 
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Consultoria Agronômica", layout="wide")
@@ -123,15 +123,22 @@ dose = 0
 sacos = 0
 
 doses = []
+limitantes = []
 
 if f_n > 0:
-    doses.append((req_n / f_n) * 100)
+    dose_n = (req_n / f_n) * 100
+    doses.append(dose_n)
+    limitantes.append(("N", dose_n))
 
 if f_p > 0:
-    doses.append((req_p / f_p) * 100)
+    dose_p = (req_p / f_p) * 100
+    doses.append(dose_p)
+    limitantes.append(("P", dose_p))
 
 if f_k > 0:
-    doses.append((req_k / f_k) * 100)
+    dose_k = (req_k / f_k) * 100
+    doses.append(dose_k)
+    limitantes.append(("K", dose_k))
 
 if doses:
     dose = max(doses)
@@ -139,6 +146,32 @@ if doses:
     sacos = math.ceil(total_adubo / 50)
 
     st.success(f"Dose: {dose:.0f} kg/ha | Total: {sacos} sacos")
+
+    nutrientes_limitantes = [n for n, d in limitantes if d == dose]
+    st.info(f"Nutriente limitante: {', '.join(nutrientes_limitantes)}")
+
+    excesso_msgs = []
+
+    if f_n > 0:
+        aplicado_n = dose * (f_n / 100)
+        excesso_n = aplicado_n - req_n
+        if excesso_n > 0:
+            excesso_msgs.append(f"N: +{excesso_n:.1f} kg/ha")
+
+    if f_p > 0:
+        aplicado_p = dose * (f_p / 100)
+        excesso_p = aplicado_p - req_p
+        if excesso_p > 0:
+            excesso_msgs.append(f"P2O5: +{excesso_p:.1f} kg/ha")
+
+    if f_k > 0:
+        aplicado_k = dose * (f_k / 100)
+        excesso_k = aplicado_k - req_k
+        if excesso_k > 0:
+            excesso_msgs.append(f"K2O: +{excesso_k:.1f} kg/ha")
+
+    if excesso_msgs:
+        st.warning("Excesso de nutrientes: " + " | ".join(excesso_msgs))
 
 # ---------------- PDF ----------------
 st.header("5️⃣ Relatório")
@@ -167,7 +200,6 @@ def gerar_pdf():
     pdf.ln(25)
     pdf.set_text_color(0,0,0)
 
-    # ✅ DATA NO PDF
     data_atual = datetime.now().strftime("%d/%m/%Y")
     pdf.set_font("Arial","",11)
     pdf.cell(190,8, txt(f"Data: {data_atual}"), ln=True)
