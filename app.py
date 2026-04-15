@@ -40,19 +40,25 @@ with col2:
     v_atual = st.number_input("V% Atual", 0.0)
 
 with col3:
-    ctc = st.number_input("CTC (cmolc/dm³)", 5.0)
+    # ✅ ALTERAÇÃO AQUI
+    ctc = st.number_input("CTC (cmolc/dm³)", min_value=0.0, value=5.0)
     prnt = st.number_input("PRNT (%)", 80.0)
 
 # ---------------- CALAGEM ----------------
 st.header("2️⃣ Calagem")
 
+# ✅ ALTERAÇÃO AQUI
 if v_atual >= v_alvo:
     nc = 0
-    obs_calagem = "Não é necessário realizar calagem. Considerar uso de silício."
+    obs_calagem = "Não é necessário realizar calagem, pois a saturação por bases (V%) atual já atende ou supera o valor recomendado para a cultura."
 else:
     nc = ((v_alvo - v_atual) * ctc) / 100
     nc = nc / (prnt / 100) if prnt > 0 else 0
-    obs_calagem = "Realizar calagem conforme recomendação técnica."
+
+    if nc <= 0:
+        obs_calagem = "Não é necessário realizar calagem, pois não há deficiência de bases no solo que justifique a aplicação de calcário."
+    else:
+        obs_calagem = "Realizar calagem para elevar a saturação por bases (V%) ao nível adequado para a cultura."
 
 total_calc = nc * area
 
@@ -102,7 +108,7 @@ if cultura == "Soja":
 else:
     obs_n = "Aplicar nitrogênio conforme recomendação."
 
-st.success(f"N: {req_n} | P: {req_p} | K: {req_k} kg/ha")
+st.success(f"N: {req_n} | P2O5: {req_p} | K2O: {req_k} kg/ha")
 st.warning(obs_n)
 
 # ---------------- ADUBO FORMULADO ----------------
@@ -134,11 +140,9 @@ def gerar_pdf():
     def txt(t):
         return str(t).encode('latin-1', 'replace').decode('latin-1')
 
-    # Fundo
     pdf.set_fill_color(230,255,230)
     pdf.rect(0,0,210,297,'F')
 
-    # Cabeçalho
     pdf.set_fill_color(34,139,34)
     pdf.rect(0,0,210,35,'F')
 
@@ -153,7 +157,6 @@ def gerar_pdf():
     pdf.ln(25)
     pdf.set_text_color(0,0,0)
 
-    # DADOS
     pdf.set_fill_color(220,220,220)
     pdf.set_font("Arial","B",12)
     pdf.cell(190,8, txt("DADOS DA ÁREA"), ln=True, fill=True)
@@ -165,7 +168,6 @@ def gerar_pdf():
 
     pdf.ln(5)
 
-    # ANÁLISE
     pdf.set_font("Arial","B",12)
     pdf.cell(190,8, txt("ANÁLISE DO SOLO"), ln=True, fill=True)
 
@@ -177,7 +179,6 @@ def gerar_pdf():
 
     pdf.ln(5)
 
-    # CALAGEM
     pdf.set_font("Arial","B",12)
     pdf.cell(190,8, txt("CALAGEM"), ln=True, fill=True)
 
@@ -191,17 +192,15 @@ def gerar_pdf():
 
     pdf.ln(5)
 
-    # ADUBAÇÃO
     pdf.set_font("Arial","B",12)
     pdf.cell(190,8, txt("ADUBAÇÃO"), ln=True, fill=True)
 
     pdf.set_font("Arial","",11)
     pdf.cell(190,8, txt(f"N: {req_n} kg/ha"), ln=True)
-    pdf.cell(190,8, txt(f"P₂O₅: {req_p} kg/ha"), ln=True)
-    pdf.cell(190,8, txt(f"K₂O: {req_k} kg/ha"), ln=True)
+    pdf.cell(190,8, txt(f"P2O5: {req_p} kg/ha"), ln=True)
+    pdf.cell(190,8, txt(f"K2O: {req_k} kg/ha"), ln=True)
     pdf.cell(190,8, txt(obs_n), ln=True)
 
-    # ADUBO FORMULADO
     if dose > 0:
         pdf.ln(5)
         pdf.set_font("Arial","B",12)
@@ -212,10 +211,8 @@ def gerar_pdf():
         pdf.cell(190,8, txt(f"Dose: {dose:.0f} kg/ha"), ln=True)
         pdf.cell(190,8, txt(f"Sacos: {sacos}"), ln=True)
 
-    # ✅ CORREÇÃO AQUI
     return pdf.output(dest='S').encode('latin-1')
 
-# BOTÃO
 if st.button("📄 Gerar PDF"):
     try:
         pdf_bytes = gerar_pdf()
