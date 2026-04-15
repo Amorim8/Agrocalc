@@ -40,14 +40,14 @@ with col2:
     v_atual = st.number_input("V% Atual", 0.0)
 
 with col3:
-    # ✅ ALTERAÇÃO AQUI
+    # ✅ CTC liberado
     ctc = st.number_input("CTC (cmolc/dm³)", min_value=0.0, value=5.0)
     prnt = st.number_input("PRNT (%)", 80.0)
 
 # ---------------- CALAGEM ----------------
 st.header("2️⃣ Calagem")
 
-# ✅ ALTERAÇÃO AQUI
+# ✅ Mensagem corrigida
 if v_atual >= v_alvo:
     nc = 0
     obs_calagem = "Não é necessário realizar calagem, pois a saturação por bases (V%) atual já atende ou supera o valor recomendado para a cultura."
@@ -116,9 +116,10 @@ st.header("4️⃣ Adubo Formulado")
 
 col1, col2, col3 = st.columns(3)
 
-f_n = col1.number_input("N (%)", 0)
-f_p = col2.number_input("P (%)", 20)
-f_k = col3.number_input("K (%)", 20)
+# ✅ Formulação liberada
+f_n = col1.number_input("N (%)", min_value=0.0, value=0.0)
+f_p = col2.number_input("P (%)", min_value=0.0, value=20.0)
+f_k = col3.number_input("K (%)", min_value=0.0, value=20.0)
 
 dose = 0
 sacos = 0
