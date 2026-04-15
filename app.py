@@ -1,11 +1,13 @@
 import streamlit as st
 from fpdf import FPDF
 import math
-import pdfplumber
-import re
+from datetime import datetime
 
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="Consultoria Agronômica", layout="wide")
+
+# ---------------- LOGO ----------------
+st.image("logo.png", width=120)
 
 st.title("🌿 Consultoria Agronômica")
 st.subheader("Consultor: Felipe Amorim")
@@ -28,100 +30,33 @@ cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
 # V% automático
 v_alvo = 70 if cultura == "Soja" else 60
 
-# ---------------- UPLOAD PDF ----------------
-st.header("📂 Upload da Análise de Solo (PDF)")
-
-uploaded_file = st.file_uploader("Envie o PDF", type=["pdf"])
-
-dados_pdf = {}
-amostras_dict = {}
-
-if uploaded_file:
-    with pdfplumber.open(uploaded_file) as pdf:
-        texto = ""
-        for pagina in pdf.pages:
-            texto += pagina.extract_text() + "\n"
-
-    st.text_area("🔍 Texto extraído (debug)", texto, height=150)
-
-    blocos = texto.split("\n\n")
-
-    for bloco in blocos:
-        if "AMOSTRA" in bloco.upper() or "TALHÃO" in bloco.upper():
-            nome = bloco.strip().split("\n")[0]
-            amostras_dict[nome] = bloco
-
-    if not amostras_dict:
-        amostras_dict["Amostra Única"] = texto
-
-    amostra_escolhida = st.selectbox("Escolha a amostra:", list(amostras_dict.keys()))
-    bloco = amostras_dict[amostra_escolhida]
-
-    # -------- PROFUNDIDADE --------
-    profundidades = {"0-20 cm": bloco, "20-40 cm": bloco}
-
-    if "20-40" in bloco:
-        partes = re.split(r"20[-–]40", bloco)
-        profundidades["0-20 cm"] = partes[0]
-        if len(partes) > 1:
-            profundidades["20-40 cm"] = partes[1]
-
-    profundidade = st.selectbox("Profundidade:", list(profundidades.keys()))
-    trecho = profundidades[profundidade]
-
-    # -------- EXTRAÇÃO --------
-    def extrair(padrao):
-        match = re.search(padrao, trecho, re.IGNORECASE)
-        return float(match.group(1)) if match else 0.0
-
-    dados_pdf = {
-        "p": extrair(r"P[^0-9]*([\d\.]+)"),
-        "k": extrair(r"K[^0-9]*([\d\.]+)"),
-        "argila": extrair(r"Argila[^0-9]*([\d\.]+)"),
-        "v": extrair(r"V%[^0-9]*([\d\.]+)")
-    }
-
-    st.success("✅ Dados preenchidos automaticamente!")
-
 # ---------------- ANÁLISE DO SOLO ----------------
 st.header("1️⃣ Análise de Solo (Química)")
 
 col1, col2, col3 = st.columns(3)
 
-if dados_pdf:
-    p = dados_pdf["p"]
-    k = dados_pdf["k"]
-    argila = dados_pdf["argila"]
-    v_atual = dados_pdf["v"]
+with col1:
+    p = st.number_input("Fósforo (mg/dm³)", 0.0)
+    k = st.number_input("Potássio (cmolc/dm³)", 0.0)
 
-    st.info("📥 Dados vindos do PDF")
-else:
-    with col1:
-        p = st.number_input("Fósforo (mg/dm³)", 0.0)
-        k = st.number_input("Potássio (cmolc/dm³)", 0.0)
+with col2:
+    argila = st.number_input("Argila (g/kg ou %)", 0.0)
+    v_atual = st.number_input("V% Atual", 0.0)
 
-    with col2:
-        argila = st.number_input("Argila (g/kg ou %)", 0.0)
-        v_atual = st.number_input("V% Atual", 0.0)
-
-    with col3:
-        ctc = st.number_input("CTC (cmolc/dm³)", 5.0)
-        prnt = st.number_input("PRNT (%)", 80.0)
-
-# garantir que sempre exista
-ctc = st.number_input("CTC (cmolc/dm³)", 5.0)
-prnt = st.number_input("PRNT (%)", 80.0)
+with col3:
+    ctc = st.number_input("CTC (cmolc/dm³)", 5.0)
+    prnt = st.number_input("PRNT (%)", 80.0)
 
 # ---------------- CALAGEM ----------------
 st.header("2️⃣ Calagem")
 
 if v_atual >= v_alvo:
     nc = 0
-    obs_calagem = "Não é necessário realizar calagem. Considerar uso de silício."
+    obs_calagem = "Não é necessário realizar calagem, pois a saturação por bases (V%) atual já está adequada ou acima do nível desejado para a cultura."
 else:
     nc = ((v_alvo - v_atual) * ctc) / 100
     nc = nc / (prnt / 100) if prnt > 0 else 0
-    obs_calagem = "Realizar calagem conforme recomendação técnica."
+    obs_calagem = "Realizar calagem para elevar a saturação por bases (V%) ao nível adequado da cultura."
 
 total_calc = nc * area
 
@@ -138,9 +73,14 @@ niveis = ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"]
 
 col1, col2, col3 = st.columns(3)
 
-nivel_n = col1.selectbox("Nitrogênio", niveis)
-nivel_p = col2.selectbox("Fósforo", niveis)
-nivel_k = col3.selectbox("Potássio", niveis)
+with col1:
+    nivel_n = st.selectbox("Nitrogênio", niveis)
+
+with col2:
+    nivel_p = st.selectbox("Fósforo", niveis)
+
+with col3:
+    nivel_k = st.selectbox("Potássio", niveis)
 
 # ---------------- TABELA ----------------
 tabela = {
@@ -160,8 +100,9 @@ req_n = tabela[cultura]["N"][nivel_n]
 req_p = tabela[cultura]["P"][nivel_p]
 req_k = tabela[cultura]["K"][nivel_k]
 
+# Nitrogênio
 if cultura == "Soja":
-    obs_n = "Nitrogênio dispensado. Focar na inoculação."
+    obs_n = "Nitrogênio dispensado. Priorizar inoculação com rizóbio."
 else:
     obs_n = "Aplicar nitrogênio conforme recomendação."
 
@@ -197,9 +138,13 @@ def gerar_pdf():
     def txt(t):
         return str(t).encode('latin-1', 'replace').decode('latin-1')
 
+    data = datetime.now().strftime("%d/%m/%Y")
+
+    # Fundo
     pdf.set_fill_color(230,255,230)
     pdf.rect(0,0,210,297,'F')
 
+    # Cabeçalho
     pdf.set_fill_color(34,139,34)
     pdf.rect(0,0,210,35,'F')
 
@@ -211,9 +156,13 @@ def gerar_pdf():
     pdf.set_font("Arial","B",12)
     pdf.cell(210,10, txt("Consultor: Felipe Amorim"), align="C")
 
-    pdf.ln(25)
+    pdf.ln(20)
     pdf.set_text_color(0,0,0)
 
+    pdf.set_font("Arial","",10)
+    pdf.cell(190,8, txt(f"Data: {data}"), ln=True)
+
+    # DADOS
     pdf.set_fill_color(220,220,220)
     pdf.set_font("Arial","B",12)
     pdf.cell(190,8, txt("DADOS DA ÁREA"), ln=True, fill=True)
@@ -225,6 +174,7 @@ def gerar_pdf():
 
     pdf.ln(5)
 
+    # ANÁLISE
     pdf.set_font("Arial","B",12)
     pdf.cell(190,8, txt("ANÁLISE DO SOLO"), ln=True, fill=True)
 
@@ -236,19 +186,20 @@ def gerar_pdf():
 
     pdf.ln(5)
 
+    # CALAGEM
     pdf.set_font("Arial","B",12)
     pdf.cell(190,8, txt("CALAGEM"), ln=True, fill=True)
 
     pdf.set_font("Arial","",11)
+    pdf.multi_cell(190,8, txt(obs_calagem))
 
-    if nc == 0:
-        pdf.multi_cell(190,8, txt(obs_calagem))
-    else:
+    if nc > 0:
         pdf.cell(190,8, txt(f"Necessidade: {nc:.2f} t/ha"), ln=True)
         pdf.cell(190,8, txt(f"Total: {total_calc:.2f} t"), ln=True)
 
     pdf.ln(5)
 
+    # ADUBAÇÃO
     pdf.set_font("Arial","B",12)
     pdf.cell(190,8, txt("ADUBAÇÃO"), ln=True, fill=True)
 
@@ -258,6 +209,7 @@ def gerar_pdf():
     pdf.cell(190,8, txt(f"K2O: {req_k} kg/ha"), ln=True)
     pdf.cell(190,8, txt(obs_n), ln=True)
 
+    # ADUBO FORMULADO
     if dose > 0:
         pdf.ln(5)
         pdf.set_font("Arial","B",12)
@@ -270,6 +222,7 @@ def gerar_pdf():
 
     return pdf.output(dest='S').encode('latin-1')
 
+# BOTÃO
 if st.button("📄 Gerar PDF"):
     try:
         pdf_bytes = gerar_pdf()
