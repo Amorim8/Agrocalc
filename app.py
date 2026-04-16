@@ -1,135 +1,154 @@
 import streamlit as st
 from fpdf import FPDF
-from datetime import datetime
+import math
 
-# ---------------- CONFIGURAÇÃO DE INTERFACE ----------------
-st.set_page_config(page_title="Consultoria Agronômica - Felipe Amorim", layout="wide")
+# ---------------- CONFIG E PROTEÇÃO VISUAL ----------------
+st.set_page_config(page_title="Consultoria Felipe Amorim", layout="wide")
 
-# Estilização CSS para deixar o visual "bonitão"
-st.markdown("""
+hide_style = """
     <style>
-    .main { background-color: #f8f9fa; }
-    .metric-card {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        border-top: 5px solid #2e7d32;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-    .section-header {
-        background-color: #343a40;
-        color: white;
-        padding: 10px;
-        border-radius: 5px;
-        margin-top: 20px;
-        margin-bottom: 10px;
-        font-weight: bold;
-    }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
-    """, unsafe_allow_html=True)
+"""
+st.markdown(hide_style, unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align: center; color: #2e7d32;'>🌱 Sistema de Recomendação Técnica</h1>", unsafe_allow_html=True)
-st.markdown("<h3 style='text-align: center; color: #555;'>Consultor Especialista: Felipe Amorim</h3>", unsafe_allow_html=True)
+st.title("🌿 Consultoria Agronômica Inteligente")
+st.subheader("Consultor: Felipe Amorim")
 
-# ---------------- ENTRADA DE DADOS ----------------
-with st.container():
-    st.markdown('<div class="section-header">📋 DADOS DE CAMPO E ANÁLISE DE SOLO</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        cliente = st.text_input("Produtor", "Fazenda Modelo")
-        cultura = st.selectbox("Cultura", ["Milho", "Soja"])
-    with c2:
-        area = st.number_input("Área Total (ha)", min_value=0.1, value=10.0)
-        argila = st.number_input("Argila (%)", 0.0, 100.0, 53.0)
-    with c3:
-        p_solo = st.number_input("Fósforo (mg/dm³)", 0.0)
-        k_solo = st.number_input("Potássio (cmolc/dm³)", 0.0)
-    with c4:
-        prod_meta = st.number_input("Meta (sc/ha)", value=118.0)
-        v_atual = st.number_input("V% Atual", 0.0)
+# ---------------- SIDEBAR ----------------
+st.sidebar.header("🎯 Planejamento da Safra")
+cliente = st.sidebar.text_input("Produtor:", "Cliente")
+talhao = st.sidebar.text_input("Talhão:", "Gleba 01")
+area = st.sidebar.number_input("Área Total (ha):", min_value=0.1, value=1.0)
+cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
 
-# ---------------- LÓGICA TÉCNICA (PDFs RORAIMA/CERRADO) ----------------
-# Travando na "linha" da argila para P
-if argila > 60:
-    limites_p, rec_p_base = [2.0, 4.0], (120, 80, 40)
-elif 35 < argila <= 60:
-    limites_p, rec_p_base = [3.0, 6.0], (110, 70, 30)
-elif 15 < argila <= 35:
-    limites_p, rec_p_base = [5.0, 10.0], (90, 60, 20)
-else:
-    limites_p, rec_p_base = [8.0, 16.0], (80, 40, 0)
+meta_ton = st.sidebar.slider(
+    f"Meta de Colheita ({cultura}) - Ton/ha:", 
+    min_value=2.0, max_value=12.0, 
+    value=4.0 if cultura == "Soja" else 8.0, step=0.5
+)
 
-status_p = "BAIXO" if p_solo <= limites_p[0] else ("MÉDIO" if p_solo <= limites_p[1] else "BOM")
-dose_p = rec_p_base[0] if status_p == "BAIXO" else (rec_p_base[1] if status_p == "MÉDIO" else rec_p_base[2])
-dose_k = 90 if k_solo <= 0.15 else (60 if k_solo <= 0.30 else 30)
+# ---------------- 1️⃣ ENTRADA DE DADOS ----------------
+st.header("1️⃣ Análise de Solo (Química e Física)")
+col1, col2, col3 = st.columns(3)
+with col1:
+    p_solo = st.number_input("Fósforo (mg/dm³)", 0.0, value=8.0)
+    k_solo = st.number_input("Potássio (cmolc/dm³)", 0.0, value=0.15)
+with col2:
+    argila = st.number_input("Argila (%)", 0.0, max_value=100.0, value=35.0)
+    v_atual = st.number_input("V% Atual", 0.0, value=40.0)
+with col3:
+    ctc = st.number_input("CTC (cmolc/dm³)", 0.0, value=3.25)
+    prnt = st.number_input("PRNT (%)", 0.0, value=85.0)
 
-# Calagem (V% alvo: 70 soja / 60 milho)
+# ---------------- 2️⃣ LÓGICA TÉCNICA ----------------
+def interpretar_solo(p, k, arg):
+    if arg > 60: limits_p = [2.0, 4.0, 6.0, 9.0]
+    elif arg > 35: limits_p = [3.0, 6.0, 9.0, 12.0]
+    elif arg > 15: limits_p = [4.0, 8.0, 12.0, 18.0]
+    else: limits_p = [6.0, 12.0, 18.0, 30.0]
+    
+    niv_p = "Baixo" if p <= limits_p[1] else "Médio" if p <= limits_p[2] else "Bom"
+    niv_k = "Baixo" if k <= 0.15 else "Médio" if k <= 0.30 else "Bom"
+    return niv_p, niv_k
+
+nivel_p, nivel_k = interpretar_solo(p_solo, k_solo, argila)
+
+# Calagem
 v_alvo = 70 if cultura == "Soja" else 60
-ctc = 5.0 # Exemplo, pode ser input
-prnt = 80.0
 nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
+total_calc = nc * area
 
-# ---------------- ESTRATÉGIA DE NITROGÊNIO (N) ----------------
-if cultura == "Milho":
-    n_total = 150 if prod_meta > 110 else 120
-    n_plantio = 30
-    n_cobertura = n_total - n_plantio
+# Adubação
+if cultura == "Soja":
+    rec_n, obs_n = 0, "Nitrogênio via Fixação Biológica. Realizar inoculação."
+    rec_p = (meta_ton * 15) * (1.5 if nivel_p == "Baixo" else 1.0)
+    rec_k = (meta_ton * 20) * (1.4 if nivel_k == "Baixo" else 1.0)
 else:
-    n_total = n_plantio = n_cobertura = 0
+    rec_n, obs_n = meta_ton * 22, "Dividir N: 20% no plantio e 80% em cobertura."
+    rec_p = (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0)
+    rec_k = (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
 
-# ---------------- CÁLCULO DE FORMULADO (SACOS) ----------------
-st.markdown('<div class="section-header">🧪 ESCOLHA DO ADUBO (FORMULADO)</div>', unsafe_allow_html=True)
-cf1, cf2, cf3 = st.columns(3)
-with cf1: f_n = st.number_input("% N no saco", 0.0, value=4.0)
-with cf2: f_p = st.number_input("% P no saco", 0.0, value=14.0)
-with cf3: f_k = st.number_input("% K no saco", 0.0, value=8.0)
+# ---------------- 3️⃣ EXIBIÇÃO NA TELA ----------------
+st.divider()
+st.header(f"2️⃣ Diagnóstico e Recomendações")
+st.info(f"**Calagem:** {nc:.2f} t/ha | **Adubação NPK:** {rec_n:.0f}-{rec_p:.0f}-{rec_k:.0f} kg/ha")
 
-# Calcula dose pelo limitante (geralmente P)
-dose_ha = (dose_p / f_p) * 100 if f_p > 0 else 0
-total_kg = dose_ha * area
-sacos_total = total_kg / 50
-n_fornecido_plantio = (dose_ha * f_n) / 100
+# ---------------- 4️⃣ FORMULADOS ----------------
+st.header("3️⃣ Insumos e Sacaria")
+f1, f2, f3 = st.columns(3)
+fn, fp, fk = f1.number_input("N%", 0), f2.number_input("P%", 20), f3.number_input("K%", 20)
+dose_ha = (rec_p / fp * 100) if fp > 0 else 0
+total_sacos = math.ceil((dose_ha * area) / 50) if dose_ha > 0 else 0
 
-# ---------------- EXIBIÇÃO NA CALCULADORA (O "BONITÃO") ----------------
-st.markdown('<div class="section-header">📊 RECOMENDAÇÃO FINAL (VISÍVEL NA TELA)</div>', unsafe_allow_html=True)
+if dose_ha > 0:
+    st.success(f"Dose: {dose_ha:.0f} kg/ha | Total: {total_sacos} sacos de 50kg")
 
-m1, m2, m3, m4 = st.columns(4)
-with m1:
-    st.markdown(f"""<div class="metric-card">
-        <h4>ADUBO PLANTIO</h4>
-        <h2 style='color: #2e7d32;'>{dose_ha:.0f} kg/ha</h2>
-        <p><b>{sacos_total:.0f} Sacos</b> p/ área total</p>
-    </div>""", unsafe_allow_html=True)
+# ---------------- 5️⃣ PDF PROFISSIONAL ----------------
+def gerar_pdf():
+    pdf = FPDF()
+    pdf.add_page()
+    def txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
 
-with m2:
-    st.markdown(f"""<div class="metric-card">
-        <h4>NITROGÊNIO (N)</h4>
-        <h2 style='color: #1565c0;'>{n_total} kg/ha</h2>
-        <p>Plantio: {n_plantio}kg | Cob: {n_cobertura}kg</p>
-    </div>""", unsafe_allow_html=True)
+    # Cores e Cabeçalho Verde Forte
+    pdf.set_fill_color(34, 139, 34)
+    pdf.rect(0, 0, 210, 40, 'F')
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 20, txt("LAUDO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(190, 5, txt(f"Consultor: Felipe Amorim"), align="C", ln=True)
 
-with m3:
-    st.markdown(f"""<div class="metric-card">
-        <h4>CALAGEM</h4>
-        <h2 style='color: #ef6c00;'>{nc:.2f} t/ha</h2>
-        <p>Total: <b>{(nc*area):.1f} Ton</b></p>
-    </div>""", unsafe_allow_html=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(15)
 
-with m4:
-    st.markdown(f"""<div class="metric-card">
-        <h4>STATUS SOLO</h4>
-        <p>P: <b>{status_p}</b></p>
-        <p>K: <b>{status_k}</b></p>
-        <p>Argila: {argila}%</p>
-    </div>""", unsafe_allow_html=True)
+    # SUBTÍTULO: DADOS (FUNDO CINZA)
+    pdf.set_font("Arial", "B", 12)
+    pdf.set_fill_color(220, 220, 220)
+    pdf.cell(190, 8, txt("1. INFORMAÇÕES GERAIS"), ln=True, fill=True)
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(190, 7, txt(f"Produtor: {cliente} | Talhão: {talhao}"), ln=True)
+    pdf.cell(190, 7, txt(f"Cultura: {cultura} | Área: {area} ha | Meta: {meta_ton} t/ha"), ln=True)
+    
+    pdf.ln(5)
+    
+    # SUBTÍTULO: ANALISE
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 8, txt("2. DIAGNÓSTICO DO SOLO"), ln=True, fill=True)
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(190, 7, txt(f"P: {p_solo} mg/dm³ ({nivel_p}) | K: {k_solo} cmolc ({nivel_k}) | Argila: {argila}%"), ln=True)
+    pdf.cell(190, 7, txt(f"V% Atual: {v_atual}% | CTC: {ctc} | PRNT: {prnt}%"), ln=True)
 
-# Alerta sobre o Nitrogênio fornecido no adubo
-if cultura == "Milho":
-    n_extra = n_cobertura + (n_plantio - n_fornecido_plantio)
-    st.warning(f"💡 **Nota do Consultor:** O adubo formulado fornece {n_fornecido_plantio:.1f} kg de N no plantio. Você deve ajustar a cobertura para fornecer o restante do N planejado.")
+    pdf.ln(5)
 
-# ---------------- PDF ----------------
-if st.button("📄 GERAR RELATÓRIO TÉCNICO COMPLETO"):
-    # (Lógica do PDF mantida com o visual premium que já fizemos)
-    st.write("PDF Gerado com Sucesso! (Clique para baixar)")
+    # SUBTÍTULO: RECOMENDAÇÃO
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 8, txt("3. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(190, 7, txt(f"CALAGEM: {nc:.2f} t/ha (Total: {total_calc:.2f} t)"), ln=True)
+    pdf.cell(190, 7, txt(f"ADUBAÇÃO NPK (kg/ha): {rec_n:.0f} - {rec_p:.0f} - {rec_k:.0f}"), ln=True)
+    pdf.set_font("Arial", "I", 10)
+    pdf.multi_cell(190, 6, txt(f"Obs: {obs_n}"))
+    
+    if dose_ha > 0:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(190, 7, txt(f"FORMULADO: {fn}-{fp}-{fk} | Dose: {dose_ha:.0f} kg/ha | Total: {total_sacos} sacos"), ln=True)
+
+    # RODAPÉ TÉCNICO (FONTES)
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_text_color(34, 139, 34)
+    pdf.cell(190, 8, txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
+    pdf.set_font("Arial", "", 9)
+    pdf.set_text_color(50, 50, 50)
+    pdf.multi_cell(190, 5, txt("- Interpretação de P: Embrapa Cerrados (Sistemas de Produção).\n- Níveis Críticos de K: Embrapa Soja / Embrapa Milho.\n- Exportação de Nutrientes: IPNI Brasil (International Plant Nutrition Institute).\n- Cálculo de Calagem: Método da Elevação da Saturação por Bases (V%)."))
+
+    return pdf.output(dest='S').encode('latin-1')
+
+if st.button("📄 Gerar Relatório Profissional"):
+    pdf_bytes = gerar_pdf()
+    st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Laudo_{cliente}_{talhao}.pdf")
+
+st.caption("Sistema de Consultoria Agronômica | Felipe Amorim")
