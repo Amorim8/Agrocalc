@@ -124,23 +124,25 @@ with r2:
     f_p = cp.number_input("P%", 0, value=20)
     f_k = ck.number_input("K%", 0, value=20)
     if f_p > 0 or f_k > 0:
-        dose_final = max((rec_p/f_p*100) if f_p>0 else 0, (rec_k/f_k*100) if f_k>0 else 0)
+        dose_p = (rec_p / f_p * 100) if f_p > 0 else 0
+        dose_k = (rec_k / f_k * 100) if f_k > 0 else 0
+        dose_final = max(dose_p, dose_k)
         total_sacos = math.ceil((dose_final * area) / 50)
         st.success(f"Dose: {dose_final:.0f} kg/ha | Total: {total_sacos} sacos")
 
-# ---------------- 4️⃣ PDF COMPLETO ----------------
+# ---------------- 4️⃣ PDF RELATÓRIO ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     def txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
     
-    # Cabeçalho
+    # Cabeçalho - Renomeado para RELATÓRIO
     pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 15, txt("LAUDO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
+    pdf.cell(190, 15, txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
     pdf.set_font("Arial", "", 10); pdf.cell(190, 5, txt(f"Consultor: Felipe Amorim | Data: {datetime.now().strftime('%d/%m/%Y')}"), align="C", ln=True)
     
-    # Dados Gerais
+    # Dados Gerais e Diagnóstico
     pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
     pdf.cell(190, 8, txt(" 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO"), ln=True, fill=True)
     pdf.set_font("Arial", "", 10)
@@ -155,7 +157,7 @@ def gerar_pdf():
     pdf.set_font("Arial", "", 10)
     pdf.cell(190, 7, txt(f" Calagem: {nc:.2f} t/ha (Total para a área: {total_calc:.2f} t)"), ln=True)
     
-    # Seção de Nitrogênio no Laudo
+    # Detalhamento de N no Relatório
     if cultura == "Milho":
         pdf.set_font("Arial", "B", 10)
         pdf.cell(190, 7, txt(f" Recomendação de Nitrogênio (N): Total {rec_n:.0f} kg/ha"), ln=True)
@@ -171,7 +173,7 @@ def gerar_pdf():
     pdf.cell(190, 7, txt(f" Necessidade de Compra: {total_sacos} sacos (50kg) para a área total."), ln=True)
 
     # Fontes
-    pdf.ln(10); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
+    pdf.ln(15); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
     pdf.cell(190, 8, txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
     pdf.set_font("Arial", "I", 9); pdf.set_text_color(50, 50, 50)
     pdf.multi_cell(190, 5, txt("- Interpretacao de Solo: Embrapa Cerrados / Embrapa Soja.\n- Exportacao e Extracao: IPNI Brasil.\n- Manejo N: Boletim 100 / Embrapa Milho e Sorgo.\n- Calagem: Metodo da Elevacao da Saturacao por Bases (V%)."))
@@ -179,8 +181,9 @@ def gerar_pdf():
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
-if st.button("📄 GERAR LAUDO PROFISSIONAL"):
+if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
     pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Laudo_{cliente}.pdf")
+    # Nome do arquivo de download também renomeado
+    st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{cliente}.pdf")
 
 st.caption("Felipe Amorim | Consultoria Agronômica")
