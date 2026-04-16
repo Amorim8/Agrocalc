@@ -35,10 +35,11 @@ st.markdown("""
 with st.sidebar:
     st.markdown("<h1 style='text-align: center;'>🌿</h1>", unsafe_allow_html=True)
     st.title("Configurações")
-    cliente = st.text_input("👨‍🌾 Nome do Cliente:", "Produtor Exemplo")
-    fazenda = st.text_input("🏠 Fazenda:", "Nome da Propriedade")
-    talhao = st.text_input("📍 Talhão:", "Gleba 01")
-    municipio = st.text_input("🏙️ Município:", "Cidade")
+    # Removi o "Exemplo" do padrão para facilitar
+    nome_cliente_input = st.text_input("👨‍🌾 Nome do Cliente:", "")
+    fazenda = st.text_input("🏠 Fazenda:", "")
+    talhao = st.text_input("📍 Talhão:", "")
+    municipio = st.text_input("🏙️ Município:", "")
     estado = st.selectbox("🌎 Estado:", ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"])
     
     st.divider()
@@ -50,6 +51,9 @@ with st.sidebar:
         options=[float(i/2) for i in range(2, 31)], 
         value=4.0 if cultura == "Soja" else 8.0
     )
+
+# Determina o nome para o arquivo (evita o "Exemplo")
+nome_para_arquivo = nome_cliente_input.replace(" ", "_") if nome_cliente_input else "Cliente"
 
 # ---------------- CABEÇALHO ----------------
 st.title("SISTEMA DE PRESCRIÇÃO AGRONÔMICA")
@@ -86,14 +90,12 @@ n_plantio, n_cobertura = 0, 0
 if cultura == "Soja":
     rec_n, rec_p = 0, (meta_ton * 15) * (1.5 if nivel_p == "Baixo" else 1.0)
     rec_k = (meta_ton * 20) * (1.4 if nivel_k == "Baixo" else 1.0)
-    obs_n = "Inoculação via Bradyrhizobium."
 else:
     rec_n = meta_ton * 22
     n_plantio = 30
     n_cobertura = max(0.0, rec_n - n_plantio)
     rec_p = (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0)
     rec_k = (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
-    obs_n = f"N: {n_plantio} kg Plantio | {n_cobertura:.0f} kg Cobertura."
 
 # ---------------- 2️⃣ DASHBOARD ----------------
 st.divider()
@@ -124,9 +126,7 @@ with r2:
     f_p = cp.number_input("P%", 0, value=20)
     f_k = ck.number_input("K%", 0, value=20)
     if f_p > 0 or f_k > 0:
-        dose_p = (rec_p / f_p * 100) if f_p > 0 else 0
-        dose_k = (rec_k / f_k * 100) if f_k > 0 else 0
-        dose_final = max(dose_p, dose_k)
+        dose_final = max((rec_p/f_p*100) if f_p>0 else 0, (rec_k/f_k*100) if f_k>0 else 0)
         total_sacos = math.ceil((dose_final * area) / 50)
         st.success(f"Dose: {dose_final:.0f} kg/ha | Total: {total_sacos} sacos")
 
@@ -136,7 +136,7 @@ def gerar_pdf():
     pdf.add_page()
     def txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
     
-    # Cabeçalho - Renomeado para RELATÓRIO
+    # Cabeçalho
     pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", "B", 16)
     pdf.cell(190, 15, txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
@@ -146,7 +146,7 @@ def gerar_pdf():
     pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
     pdf.cell(190, 8, txt(" 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO"), ln=True, fill=True)
     pdf.set_font("Arial", "", 10)
-    pdf.cell(190, 7, txt(f" Cliente: {cliente} | Fazenda: {fazenda}"), ln=True)
+    pdf.cell(190, 7, txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Nao informado'} | Fazenda: {fazenda}"), ln=True)
     pdf.cell(190, 7, txt(f" Cultura: {cultura} | Area: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
     pdf.set_font("Arial", "B", 10)
     pdf.cell(190, 7, txt(f" Status Solo: Fósforo ({nivel_p}) | Potássio ({nivel_k}) | Textura ({classe_txt})"), ln=True)
@@ -157,23 +157,19 @@ def gerar_pdf():
     pdf.set_font("Arial", "", 10)
     pdf.cell(190, 7, txt(f" Calagem: {nc:.2f} t/ha (Total para a área: {total_calc:.2f} t)"), ln=True)
     
-    # Detalhamento de N no Relatório
     if cultura == "Milho":
         pdf.set_font("Arial", "B", 10)
         pdf.cell(190, 7, txt(f" Recomendação de Nitrogênio (N): Total {rec_n:.0f} kg/ha"), ln=True)
         pdf.set_font("Arial", "", 10)
         pdf.cell(190, 6, txt(f"  - Aplicação no Plantio: {n_plantio} kg/ha"), ln=True)
         pdf.cell(190, 6, txt(f"  - Aplicação em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
-    else:
-        pdf.cell(190, 7, txt(f" Recomendação de Nitrogênio: Fornecimento via Inoculação (Bradyrhizobium)"), ln=True)
     
-    pdf.ln(2)
-    pdf.set_font("Arial", "B", 10)
+    pdf.set_font("Arial", "B", 10); pdf.ln(2)
     pdf.cell(190, 7, txt(f" Adubação Sugerida: {dose_final:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
     pdf.cell(190, 7, txt(f" Necessidade de Compra: {total_sacos} sacos (50kg) para a área total."), ln=True)
 
     # Fontes
-    pdf.ln(15); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
+    pdf.ln(10); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
     pdf.cell(190, 8, txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
     pdf.set_font("Arial", "I", 9); pdf.set_text_color(50, 50, 50)
     pdf.multi_cell(190, 5, txt("- Interpretacao de Solo: Embrapa Cerrados / Embrapa Soja.\n- Exportacao e Extracao: IPNI Brasil.\n- Manejo N: Boletim 100 / Embrapa Milho e Sorgo.\n- Calagem: Metodo da Elevacao da Saturacao por Bases (V%)."))
@@ -183,7 +179,7 @@ def gerar_pdf():
 st.divider()
 if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
     pdf_bytes = gerar_pdf()
-    # Nome do arquivo de download também renomeado
-    st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{cliente}.pdf")
+    # Nome do arquivo agora é dinâmico e sem o "Exemplo" fixo
+    st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{nome_para_arquivo}.pdf")
 
 st.caption("Felipe Amorim | Consultoria Agronômica")
