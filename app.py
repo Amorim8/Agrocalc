@@ -3,50 +3,31 @@ from fpdf import FPDF
 import math
 from datetime import datetime
 
-# ---------------- CONFIG E ESTILO DARK PREMIUM (CORREÇÃO DE FUNDO) ----------------
+# ---------------- CONFIG E ESTILO (DESIGN DARK SEGURO) ----------------
 st.set_page_config(page_title="Felipe Amorim | Consultoria", layout="wide", page_icon="🌿")
 
-# CSS para eliminar o fundo branco e destacar os valores
 st.markdown("""
     <style>
-    /* Fundo geral mais escuro para combinar com o print */
     .main { background-color: #0e1117; }
-    
-    /* Ajuste dos Cards: Fundo cinza grafite, texto branco e borda verde */
     div[data-testid="stMetric"] {
         background-color: #1a1c23 !important;
         border: 1px solid #2e3139;
         padding: 15px;
         border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         border-left: 5px solid #28a745 !important;
     }
-    
-    /* Forçar a cor do texto dentro dos cards para branco */
     div[data-testid="stMetric"] label, div[data-testid="stMetric"] div {
         color: #ffffff !important;
     }
-
-    /* Inputs com fundo escuro para não cansar os olhos */
-    .stNumberInput, .stTextInput, .stSelectbox {
-        background-color: #262730 !important;
-        color: white !important;
-    }
-
-    /* Botão Verde Vibrante */
     .stButton>button {
         background-color: #28a745 !important;
         color: white !important;
-        border-radius: 8px;
         font-weight: bold;
-        border: none;
+        width: 100%;
         height: 3em;
     }
-    
-    /* Esconder menus desnecessários */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
@@ -54,30 +35,38 @@ st.markdown("""
 with st.sidebar:
     st.markdown("<h1 style='text-align: center;'>🌿</h1>", unsafe_allow_html=True)
     st.title("Configurações")
-    cliente = st.text_input("👨‍🌾 Cliente:", "Produtor Exemplo")
-    fazenda = st.text_input("🏠 Fazenda:", "Propriedade")
-    talhao = st.text_input("📍 Talhão:", "01")
+    cliente = st.text_input("👨‍🌾 Nome do Cliente:", "Produtor Exemplo")
+    fazenda = st.text_input("🏠 Fazenda:", "Nome da Propriedade")
+    talhao = st.text_input("📍 Talhão:", "Gleba 01")
     municipio = st.text_input("🏙️ Município:", "Cidade")
-    estado = st.selectbox("🌎 Estado:", ["GO", "MT", "MS", "MG", "PR", "SP", "BA", "TO"])
+    estado = st.selectbox("🌎 Estado:", ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"])
     
     st.divider()
-    area = st.number_input("📏 Área (ha):", min_value=0.01, value=1.0, step=0.01)
+    area = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.01, format="%.2f")
     cultura = st.radio("🌱 Cultura:", ["Soja", "Milho"], horizontal=True)
-    meta_ton = st.select_slider("🎯 Meta (t/ha):", options=[i/2 for i in range(2, 31)], value=4.0)
+    
+    meta_ton = st.select_slider(
+        "🎯 Meta de Produtividade (t/ha):", 
+        options=[i/2 for i in range(2, 31)], 
+        value=4.0 if cultura == "Soja" else 8.0
+    )
 
-# ---------------- CONTEÚDO PRINCIPAL ----------------
+# ---------------- CABEÇALHO ----------------
 st.title("SISTEMA DE PRESCRIÇÃO AGRONÔMICA")
 st.write(f"**Consultor:** Felipe Amorim | **Data:** {datetime.now().strftime('%d/%m/%Y')}")
 
-st.subheader("1️⃣ Dados da Análise de Solo")
-with st.container():
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    p_solo = c1.number_input("P (mg/dm³)", 0.0, value=8.0)
-    k_solo = c2.number_input("K (cmolc)", 0.0, value=0.15)
-    argila = c3.number_input("Argila (%)", 0.0, 100.0, value=35.0)
-    v_atual = c4.number_input("V% Atual", 0.0, 100.0, value=40.0)
-    ctc = c5.number_input("CTC Total", 0.0, value=3.25)
-    prnt = c6.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
+# ---------------- 1️⃣ ANÁLISE DE SOLO ----------------
+st.subheader("1️⃣ Análise de Solo (Química e Física)")
+col1, col2, col3 = st.columns(3)
+with col1:
+    p_solo = st.number_input("Fósforo (mg/dm³)", 0.0, value=8.0)
+    k_solo = st.number_input("Potássio (cmolc/dm³)", 0.0, value=0.15)
+with col2:
+    argila = st.number_input("Argila (%)", 0.0, 100.0, value=35.0)
+    v_atual = st.number_input("V% Atual", 0.0, 100.0, value=40.0)
+with col3:
+    ctc = st.number_input("CTC (cmolc/dm³)", 0.0, value=3.25)
+    prnt = st.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
 
 # ---------------- LÓGICA TÉCNICA ----------------
 def interpretar_solo(p, k, arg):
@@ -101,51 +90,85 @@ else:
     rec_k = (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
     obs_n = "Dividir N em cobertura."
 
-# ---------------- 2️⃣ DASHBOARD ----------------
+# ---------------- 2️⃣ DIAGNÓSTICO ----------------
 st.divider()
-st.subheader("2️⃣ Diagnóstico e Recomendações")
+st.subheader("2️⃣ Diagnóstico e Metas")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Textura Solo", classe_txt)
 m2.metric("V% Alvo", f"{v_alvo}%")
 m3.metric("Status P", nivel_p)
 m4.metric("Status K", nivel_k)
 
+# ---------------- 3️⃣ PRESCRIÇÃO E ESCOLHA DE ADUBO ----------------
 st.write("---")
-r1, r2, r3 = st.columns([1, 1, 1])
+st.subheader("3️⃣ Planejamento de Fertilizantes")
+r1, r2 = st.columns([1, 2])
+
 with r1:
     st.markdown("### 🪨 Calagem")
     st.metric("Dose (t/ha)", f"{nc:.2f}")
-    st.caption(f"Total: {total_calc:.2f} toneladas")
+    st.write(f"Total: **{total_calc:.2f} toneladas**")
 
 with r2:
-    st.markdown("### 🧪 NPK (kg/ha)")
-    st.write(f"**N:** {rec_n:.0f} | **P:** {rec_p:.0f} | **K:** {rec_k:.0f}")
-    st.info(obs_n)
+    st.markdown("### 🧪 Escolha a Formulação Comercial")
+    c_n, c_p, c_k = st.columns(3)
+    f_n = c_n.number_input("N (%)", 0, value=0 if cultura == "Soja" else 4)
+    f_p = c_p.number_input("P₂O₅ (%)", 0, value=20)
+    f_k = c_k.number_input("K₂O (%)", 0, value=20)
+    
+    # Lógica de cálculo da dose baseada no nutriente de maior demanda no adubo escolhido
+    if f_p > 0 or f_k > 0:
+        # Calcula dose pelo P se houver P, senão pelo K
+        dose_p = (rec_p / f_p * 100) if f_p > 0 else 0
+        dose_k = (rec_k / f_k * 100) if f_k > 0 else 0
+        dose_final = max(dose_p, dose_k)
+        
+        total_sacos = math.ceil((dose_final * area) / 50)
+        
+        st.success(f"✅ Recomendação: **{dose_final:.0f} kg/ha** do formulado {f_n}-{f_p}-{f_k}")
+        st.write(f"📦 Total para a área: **{total_sacos} sacos de 50kg**")
+        st.info(f"💡 {obs_n}")
+    else:
+        st.warning("Insira os valores da formulação para calcular a dose.")
 
-with r3:
-    st.markdown("### 🛒 Insumo")
-    col_f_p = st.number_input("P% do Adubo", 20)
-    if col_f_p > 0:
-        dose = (rec_p / col_f_p) * 100
-        st.success(f"Dose: **{dose:.0f} kg/ha**")
-        st.write(f"Pedido: {math.ceil((dose*area)/50)} sacos")
-
-# ---------------- 3️⃣ PDF ----------------
+# ---------------- 4️⃣ PDF ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     def txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
-    pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 40, 'F')
+
+    # Cabeçalho
+    pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 20, txt("LAUDO TÉCNICO"), align="C", ln=True)
-    pdf.set_font("Arial", "", 10); pdf.cell(190, 5, txt(f"Felipe Amorim | {datetime.now().strftime('%d/%m/%Y')}"), align="C", ln=True)
-    pdf.set_text_color(0, 0, 0); pdf.ln(15)
-    pdf.set_font("Arial", "B", 11); pdf.cell(190, 8, txt(f" Cliente: {cliente} | Fazenda: {fazenda}"), ln=True)
-    pdf.cell(190, 8, txt(f" Meta: {meta_ton} t/ha | Dose Calcário: {nc:.2f} t/ha"), ln=True)
-    pdf.cell(190, 8, txt(f" NPK Recomendado: {rec_n:.0f}-{rec_p:.0f}-{rec_k:.0f} kg/ha"), ln=True)
+    pdf.cell(190, 15, txt("LAUDO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
+    pdf.set_font("Arial", "", 11); pdf.cell(190, 5, txt(f"Consultor: Felipe Amorim | Data: {datetime.now().strftime('%d/%m/%Y')}"), align="C", ln=True)
+
+    # Dados
+    pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(220, 220, 220); pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 8, txt("1. INFORMAÇÕES GERAIS"), ln=True, fill=True)
+    pdf.set_font("Arial", "", 11)
+    pdf.cell(190, 7, txt(f"Cliente: {cliente} | Fazenda: {fazenda}"), ln=True)
+    pdf.cell(190, 7, txt(f"Local: {municipio}-{estado} | Area: {area:.2f} ha | Talhao: {talhao}"), ln=True)
+    pdf.cell(190, 7, txt(f"Cultura: {cultura} | Meta: {meta_ton} t/ha"), ln=True)
+
+    pdf.ln(5); pdf.cell(190, 8, txt("2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
+    pdf.cell(190, 7, txt(f"Calagem: {nc:.2f} t/ha (Total: {total_calc:.2f} t)"), ln=True)
+    pdf.cell(190, 7, txt(f"Demanda NPK (kg/ha): {rec_n:.0f} - {rec_p:.0f} - {rec_k:.0f}"), ln=True)
+    
+    if (f_p + f_k) > 0:
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(190, 7, txt(f"Formulado Sugerido: {f_n}-{f_p}-{f_k}"), ln=True)
+        pdf.cell(190, 7, txt(f"Dose Comercial: {dose_final:.0f} kg/ha | Total: {total_sacos} sacos (50kg)"), ln=True)
+
+    pdf.ln(10); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
+    pdf.cell(190, 8, txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
+    pdf.set_font("Arial", "", 9); pdf.set_text_color(50, 50, 50)
+    pdf.multi_cell(190, 5, txt("- Interpretacao: Embrapa Cerrados | Niveis K: Embrapa Soja/Milho.\n- Exportacao: IPNI Brasil | Metodo: Saturacao por Bases (V%)."))
+    
     return pdf.output(dest='S').encode('latin-1')
 
-if st.button("📄 GERAR LAUDO PDF"):
+st.divider()
+if st.button("📄 GERAR RELATÓRIO PROFISSIONAL PDF"):
     pdf_bytes = gerar_pdf()
     st.download_button("⬇️ Baixar Laudo", pdf_bytes, file_name=f"Laudo_{cliente}.pdf")
 
