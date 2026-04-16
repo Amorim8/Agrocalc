@@ -15,20 +15,14 @@ st.sidebar.header("📋 Informações da Área")
 cliente = st.sidebar.text_input("Produtor:", "Cliente")
 talhao = st.sidebar.text_input("Talhão:", "Gleba 01")
 
-area = st.sidebar.number_input(
-    "Área (ha):",
-    min_value=0.01,
-    value=1.0,
-    step=0.1
-)
+area = st.sidebar.number_input("Área (ha):", min_value=0.01, value=1.0)
 
 cultura = st.sidebar.selectbox("Cultura:", ["Soja", "Milho"])
 
-# V% automático
 v_alvo = 70 if cultura == "Soja" else 60
 
-# ---------------- ANÁLISE DO SOLO ----------------
-st.header("1️⃣ Análise de Solo (Química)")
+# ---------------- ANÁLISE ----------------
+st.header("1️⃣ Análise de Solo")
 
 col1, col2, col3 = st.columns(3)
 
@@ -37,11 +31,11 @@ with col1:
     k = st.number_input("Potássio (cmolc/dm³)", 0.0)
 
 with col2:
-    argila = st.number_input("Argila (g/kg ou %)", 0.0)
     v_atual = st.number_input("V% Atual", 0.0)
+    argila = st.number_input("Argila", 0.0)
 
 with col3:
-    ctc = st.number_input("CTC (cmolc/dm³)", min_value=0.0, value=5.0)
+    ctc = st.number_input("CTC", min_value=0.0, value=5.0)
     prnt = st.number_input("PRNT (%)", 80.0)
 
 # ---------------- CALAGEM ----------------
@@ -49,222 +43,117 @@ st.header("2️⃣ Calagem")
 
 if v_atual >= v_alvo:
     nc = 0
-    obs_calagem = "Não é necessário realizar calagem, pois a saturação por bases (V%) atual já atende ou supera o valor recomendado para a cultura."
+    obs_calagem = "V% já adequado, não é necessário calagem."
 else:
     nc = ((v_alvo - v_atual) * ctc) / 100
     nc = nc / (prnt / 100) if prnt > 0 else 0
+    obs_calagem = "Aplicar calcário para elevar V%."
 
-    if nc <= 0:
-        obs_calagem = "Não é necessário realizar calagem, pois não há deficiência de bases no solo que justifique a aplicação de calcário."
-    else:
-        obs_calagem = "Realizar calagem para elevar a saturação por bases (V%) ao nível adequado para a cultura."
-
-total_calc = nc * area
-
-colc1, colc2 = st.columns(2)
-colc1.metric("Calcário (t/ha)", f"{nc:.2f}")
-colc2.metric("Total (t)", f"{total_calc:.2f}")
-
+st.metric("Calcário (t/ha)", f"{nc:.2f}")
 st.info(obs_calagem)
 
-# ---------------- INTERPRETAÇÃO ----------------
-st.header("3️⃣ Interpretação do Solo")
+# ---------------- ADUBAÇÃO ----------------
+st.header("3️⃣ Recomendação")
 
-niveis = ["Muito Baixo", "Baixo", "Médio", "Alto", "Muito Alto"]
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    nivel_n = st.selectbox("Nitrogênio", niveis)
-
-with col2:
-    nivel_p = st.selectbox("Fósforo", niveis)
-
-with col3:
-    nivel_k = st.selectbox("Potássio", niveis)
-
-# ---------------- TABELA ----------------
-tabela = {
-    "Soja": {
-        "N": {n: 0 for n in niveis},
-        "P": {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 50, "Muito Alto": 30},
-        "K": {"Muito Baixo": 100, "Baixo": 90, "Médio": 70, "Alto": 50, "Muito Alto": 30}
-    },
-    "Milho": {
-        "N": {"Muito Baixo": 140, "Baixo": 120, "Médio": 90, "Alto": 60, "Muito Alto": 40},
-        "P": {"Muito Baixo": 120, "Baixo": 100, "Médio": 80, "Alto": 60, "Muito Alto": 40},
-        "K": {"Muito Baixo": 100, "Baixo": 90, "Médio": 70, "Alto": 60, "Muito Alto": 40}
-    }
-}
-
-req_n = tabela[cultura]["N"][nivel_n]
-req_p = tabela[cultura]["P"][nivel_p]
-req_k = tabela[cultura]["K"][nivel_k]
-
-# Nitrogênio
 if cultura == "Soja":
-    obs_n = "Nitrogênio dispensado. Focar na inoculação."
+    produtividade = st.selectbox("Produtividade (t/ha)", [3, 4, 5])
 else:
-    obs_n = "Aplicar nitrogênio conforme recomendação."
+    produtividade = st.number_input("Produtividade (sc/ha)", value=60)
 
-st.success(f"N: {req_n} | P2O5: {req_p} | K2O: {req_k} kg/ha")
-st.warning(obs_n)
+# N
+req_n = 0 if cultura == "Soja" else (100 if produtividade <= 60 else 120)
 
-# ---------------- ADUBO FORMULADO ----------------
+# P
+if cultura == "Milho":
+    if p <= 5:
+        req_p, nivel_p = 100, "Muito Baixo"
+    elif p <= 10:
+        req_p, nivel_p = 80, "Baixo"
+    elif p <= 15:
+        req_p, nivel_p = 60, "Médio"
+    elif p <= 20:
+        req_p, nivel_p = 40, "Alto"
+    else:
+        req_p, nivel_p = 20, "Muito Alto"
+else:
+    classe_p = "Adequado" if p <= 15 else "Alto"
+    tabela = {
+        3: {"Adequado": 60, "Alto": 30},
+        4: {"Adequado": 80, "Alto": 40},
+        5: {"Adequado": 100, "Alto": 50}
+    }
+    req_p = tabela[produtividade][classe_p]
+
+# K
+if cultura == "Milho":
+    if k <= 0.15:
+        req_k, nivel_k = 80, "Muito Baixo"
+    elif k <= 0.30:
+        req_k, nivel_k = 60, "Baixo"
+    elif k <= 0.45:
+        req_k, nivel_k = 40, "Médio"
+    elif k <= 0.60:
+        req_k, nivel_k = 20, "Alto"
+    else:
+        req_k, nivel_k = 0, "Muito Alto"
+else:
+    classe_k = "Adequado" if k <= 0.45 else "Alto"
+    tabela_k = {
+        3: {"Adequado": 60, "Alto": 40},
+        4: {"Adequado": 80, "Alto": 50},
+        5: {"Adequado": 100, "Alto": 70}
+    }
+    req_k = tabela_k[produtividade][classe_k]
+
+st.success(f"N: {req_n} | P2O5: {req_p} | K2O: {req_k}")
+
+# ---------------- FORMULADO ----------------
 st.header("4️⃣ Adubo Formulado")
 
-col1, col2, col3 = st.columns(3)
-
-f_n = col1.number_input("N (%)", min_value=0.0, value=0.0)
-f_p = col2.number_input("P (%)", min_value=0.0, value=20.0)
-f_k = col3.number_input("K (%)", min_value=0.0, value=20.0)
-
-dose = 0
-sacos = 0
+f_n = st.number_input("N (%)", 0.0)
+f_p = st.number_input("P (%)", 20.0)
+f_k = st.number_input("K (%)", 20.0)
 
 doses = []
 limitantes = []
 
-if f_n > 0:
-    dose_n = (req_n / f_n) * 100
-    doses.append(dose_n)
-    limitantes.append(("N", dose_n))
+# Milho usa N
+if cultura == "Milho" and f_n > 0:
+    dn = (req_n / f_n) * 100
+    doses.append(dn)
+    limitantes.append(("N", dn))
 
 if f_p > 0:
-    dose_p = (req_p / f_p) * 100
-    doses.append(dose_p)
-    limitantes.append(("P", dose_p))
+    dp = (req_p / f_p) * 100
+    doses.append(dp)
+    limitantes.append(("P", dp))
 
 if f_k > 0:
-    dose_k = (req_k / f_k) * 100
-    doses.append(dose_k)
-    limitantes.append(("K", dose_k))
+    dk = (req_k / f_k) * 100
+    doses.append(dk)
+    limitantes.append(("K", dk))
 
 if doses:
     dose = max(doses)
-    total_adubo = dose * area
-    sacos = math.ceil(total_adubo / 50)
+    st.success(f"Dose: {dose:.0f} kg/ha")
 
-    st.success(f"Dose: {dose:.0f} kg/ha | Total: {sacos} sacos")
-
-    nutrientes_limitantes = [n for n, d in limitantes if d == dose]
-    st.info(f"Nutriente limitante: {', '.join(nutrientes_limitantes)}")
-
-    excesso_msgs = []
-
-    if f_n > 0:
-        aplicado_n = dose * (f_n / 100)
-        excesso_n = aplicado_n - req_n
-        if excesso_n > 0:
-            excesso_msgs.append(f"N: +{excesso_n:.1f} kg/ha")
-
-    if f_p > 0:
-        aplicado_p = dose * (f_p / 100)
-        excesso_p = aplicado_p - req_p
-        if excesso_p > 0:
-            excesso_msgs.append(f"P2O5: +{excesso_p:.1f} kg/ha")
-
-    if f_k > 0:
-        aplicado_k = dose * (f_k / 100)
-        excesso_k = aplicado_k - req_k
-        if excesso_k > 0:
-            excesso_msgs.append(f"K2O: +{excesso_k:.1f} kg/ha")
-
-    if excesso_msgs:
-        st.warning("Excesso de nutrientes: " + " | ".join(excesso_msgs))
+    lim = [n for n, d in limitantes if d == dose]
+    st.info(f"Limitante: {', '.join(lim)}")
 
 # ---------------- PDF ----------------
-st.header("5️⃣ Relatório")
-
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
 
-    def txt(t):
-        return str(t).encode('latin-1', 'replace').decode('latin-1')
+    pdf.set_font("Arial","B",14)
+    pdf.cell(190,10,"Relatório Agronômico", ln=True)
 
-    pdf.set_fill_color(230,255,230)
-    pdf.rect(0,0,210,297,'F')
+    data = datetime.now().strftime("%d/%m/%Y")
+    pdf.cell(190,10,f"Data: {data}", ln=True)
 
-    pdf.set_fill_color(34,139,34)
-    pdf.rect(0,0,210,35,'F')
-
-    pdf.set_text_color(255,255,255)
-    pdf.set_font("Arial","B",18)
-    pdf.cell(210,15, txt("CONSULTORIA AGRONÔMICA"), align="C")
-
-    pdf.ln(10)
-    pdf.set_font("Arial","B",12)
-    pdf.cell(210,10, txt("Consultor: Felipe Amorim"), align="C")
-
-    pdf.ln(25)
-    pdf.set_text_color(0,0,0)
-
-    data_atual = datetime.now().strftime("%d/%m/%Y")
-    pdf.set_font("Arial","",11)
-    pdf.cell(190,8, txt(f"Data: {data_atual}"), ln=True)
-
-    pdf.set_fill_color(220,220,220)
-    pdf.set_font("Arial","B",12)
-    pdf.cell(190,8, txt("DADOS DA ÁREA"), ln=True, fill=True)
-
-    pdf.set_font("Arial","",11)
-    pdf.cell(190,8, txt(f"Produtor: {cliente}"), ln=True)
-    pdf.cell(190,8, txt(f"Área: {area} ha"), ln=True)
-    pdf.cell(190,8, txt(f"Cultura: {cultura}"), ln=True)
-
-    pdf.ln(5)
-
-    pdf.set_font("Arial","B",12)
-    pdf.cell(190,8, txt("ANÁLISE DO SOLO"), ln=True, fill=True)
-
-    pdf.set_font("Arial","",11)
-    pdf.cell(190,8, txt(f"Fósforo: {p} mg/dm³"), ln=True)
-    pdf.cell(190,8, txt(f"Potássio: {k} cmolc/dm³"), ln=True)
-    pdf.cell(190,8, txt(f"Argila: {argila}"), ln=True)
-    pdf.cell(190,8, txt(f"V%: {v_atual}"), ln=True)
-
-    pdf.ln(5)
-
-    pdf.set_font("Arial","B",12)
-    pdf.cell(190,8, txt("CALAGEM"), ln=True, fill=True)
-
-    pdf.set_font("Arial","",11)
-
-    if nc == 0:
-        pdf.multi_cell(190,8, txt(obs_calagem))
-    else:
-        pdf.cell(190,8, txt(f"Necessidade: {nc:.2f} t/ha"), ln=True)
-        pdf.cell(190,8, txt(f"Total: {total_calc:.2f} t"), ln=True)
-
-    pdf.ln(5)
-
-    pdf.set_font("Arial","B",12)
-    pdf.cell(190,8, txt("ADUBAÇÃO"), ln=True, fill=True)
-
-    pdf.set_font("Arial","",11)
-    pdf.cell(190,8, txt(f"N: {req_n} kg/ha"), ln=True)
-    pdf.cell(190,8, txt(f"P2O5: {req_p} kg/ha"), ln=True)
-    pdf.cell(190,8, txt(f"K2O: {req_k} kg/ha"), ln=True)
-    pdf.cell(190,8, txt(obs_n), ln=True)
-
-    if dose > 0:
-        pdf.ln(5)
-        pdf.set_font("Arial","B",12)
-        pdf.cell(190,8, txt("ADUBO FORMULADO"), ln=True, fill=True)
-
-        pdf.set_font("Arial","",11)
-        pdf.cell(190,8, txt(f"Fórmula: {f_n}-{f_p}-{f_k}"), ln=True)
-        pdf.cell(190,8, txt(f"Dose: {dose:.0f} kg/ha"), ln=True)
-        pdf.cell(190,8, txt(f"Sacos: {sacos}"), ln=True)
+    pdf.cell(190,10,f"N: {req_n} | P: {req_p} | K: {req_k}", ln=True)
 
     return pdf.output(dest='S').encode('latin-1')
 
-if st.button("📄 Gerar PDF"):
-    try:
-        pdf_bytes = gerar_pdf()
-        st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name="relatorio.pdf")
-    except Exception as e:
-        st.error(f"Erro ao gerar PDF: {e}")
-
-st.caption("Sistema de Consultoria Agronômica | Felipe Amorim")
+if st.button("Gerar PDF"):
+    st.download_button("Baixar", gerar_pdf(), "relatorio.pdf")
