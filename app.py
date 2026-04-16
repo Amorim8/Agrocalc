@@ -3,7 +3,7 @@ from fpdf import FPDF
 import math
 from datetime import datetime
 
-# ---------------- CONFIG E ESTILO (DESIGN DARK SEGURO) ----------------
+# ---------------- CONFIG E ESTILO ----------------
 st.set_page_config(page_title="Felipe Amorim | Consultoria", layout="wide", page_icon="🌿")
 
 st.markdown("""
@@ -39,7 +39,7 @@ with st.sidebar:
     fazenda = st.text_input("🏠 Fazenda:", "Nome da Propriedade")
     talhao = st.text_input("📍 Talhão:", "Gleba 01")
     municipio = st.text_input("🏙️ Município:", "Cidade")
-    estado = st.selectbox("🌎 Estado:", ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"])
+    estado = st.selectbox("🌎 Estado:", ["GO", "MT", "MS", "MG", "PR", "SP", "BA", "TO"])
     
     st.divider()
     area = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.01, format="%.2f")
@@ -47,7 +47,7 @@ with st.sidebar:
     
     meta_ton = st.select_slider(
         "🎯 Meta de Produtividade (t/ha):", 
-        options=[i/2 for i in range(2, 31)], 
+        options=[float(i/2) for i in range(2, 31)], 
         value=4.0 if cultura == "Soja" else 8.0
     )
 
@@ -81,16 +81,24 @@ v_alvo = 70 if cultura == "Soja" else 60
 nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
 total_calc = nc * area
 
+# Lógica de Nitrogênio detalhada
+n_plantio = 0
+n_cobertura = 0
+
 if cultura == "Soja":
     rec_n, rec_p = 0, (meta_ton * 15) * (1.5 if nivel_p == "Baixo" else 1.0)
     rec_k = (meta_ton * 20) * (1.4 if nivel_k == "Baixo" else 1.0)
-    obs_n = "Focar em Inoculação (Nitrogênio Biológico)."
+    obs_n = "Nitrogênio via Fixação Biológica. Realizar inoculação."
 else:
-    rec_n, rec_p = meta_ton * 22, (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0)
+    rec_n = meta_ton * 22 # Estimativa de 22kg de N por tonelada produzida
+    n_plantio = 30 # Padronizado 30kg de N no plantio para segurança
+    n_cobertura = max(0.0, rec_n - n_plantio)
+    
+    rec_p = (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0)
     rec_k = (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
-    obs_n = "Dividir N em cobertura."
+    obs_n = f"Distribuir N: {n_plantio} kg/ha no Plantio e {n_cobertura:.0f} kg/ha em Cobertura (V4-V6)."
 
-# ---------------- 2️⃣ DIAGNÓSTICO ----------------
+# ---------------- 2️⃣ DASHBOARD ----------------
 st.divider()
 st.subheader("2️⃣ Diagnóstico e Metas")
 m1, m2, m3, m4 = st.columns(4)
@@ -99,7 +107,7 @@ m2.metric("V% Alvo", f"{v_alvo}%")
 m3.metric("Status P", nivel_p)
 m4.metric("Status K", nivel_k)
 
-# ---------------- 3️⃣ PRESCRIÇÃO E ESCOLHA DE ADUBO ----------------
+# ---------------- 3️⃣ PRESCRIÇÃO E DIVISÃO DE N ----------------
 st.write("---")
 st.subheader("3️⃣ Planejamento de Fertilizantes")
 r1, r2 = st.columns([1, 2])
@@ -110,66 +118,59 @@ with r1:
     st.write(f"Total: **{total_calc:.2f} toneladas**")
 
 with r2:
-    st.markdown("### 🧪 Escolha a Formulação Comercial")
+    st.markdown("### 🧪 Nitrogênio Detalhado (N)")
+    if cultura == "Milho":
+        nc1, nc2, nc3 = st.columns(3)
+        nc1.metric("Total N", f"{rec_n:.0f} kg/ha")
+        nc2.metric("Plantio", f"{n_plantio} kg/ha")
+        nc3.metric("Cobertura", f"{n_cobertura:.0f} kg/ha")
+    else:
+        st.info("Soja: Nitrogênio fornecido via inoculação das sementes.")
+
+    st.markdown("---")
+    st.markdown("### 🛒 Escolha a Formulação Comercial")
     c_n, c_p, c_k = st.columns(3)
     f_n = c_n.number_input("N (%)", 0, value=0 if cultura == "Soja" else 4)
     f_p = c_p.number_input("P₂O₅ (%)", 0, value=20)
     f_k = c_k.number_input("K₂O (%)", 0, value=20)
     
-    # Lógica de cálculo da dose baseada no nutriente de maior demanda no adubo escolhido
     if f_p > 0 or f_k > 0:
-        # Calcula dose pelo P se houver P, senão pelo K
         dose_p = (rec_p / f_p * 100) if f_p > 0 else 0
         dose_k = (rec_k / f_k * 100) if f_k > 0 else 0
         dose_final = max(dose_p, dose_k)
-        
         total_sacos = math.ceil((dose_final * area) / 50)
         
-        st.success(f"✅ Recomendação: **{dose_final:.0f} kg/ha** do formulado {f_n}-{f_p}-{f_k}")
-        st.write(f"📦 Total para a área: **{total_sacos} sacos de 50kg**")
-        st.info(f"💡 {obs_n}")
-    else:
-        st.warning("Insira os valores da formulação para calcular a dose.")
-
+        st.success(f"✅ Recomendação: **{dose_final:.0f} kg/ha** do {f_n}-{f_p}-{f_k}")
+        st.write(f"📦 Total: **{total_sacos} sacos de 50kg**")
+    
 # ---------------- 4️⃣ PDF ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     def txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
-
-    # Cabeçalho
     pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", "B", 16)
     pdf.cell(190, 15, txt("LAUDO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
     pdf.set_font("Arial", "", 11); pdf.cell(190, 5, txt(f"Consultor: Felipe Amorim | Data: {datetime.now().strftime('%d/%m/%Y')}"), align="C", ln=True)
-
-    # Dados
     pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(220, 220, 220); pdf.set_font("Arial", "B", 12)
     pdf.cell(190, 8, txt("1. INFORMAÇÕES GERAIS"), ln=True, fill=True)
     pdf.set_font("Arial", "", 11)
     pdf.cell(190, 7, txt(f"Cliente: {cliente} | Fazenda: {fazenda}"), ln=True)
-    pdf.cell(190, 7, txt(f"Local: {municipio}-{estado} | Area: {area:.2f} ha | Talhao: {talhao}"), ln=True)
-    pdf.cell(190, 7, txt(f"Cultura: {cultura} | Meta: {meta_ton} t/ha"), ln=True)
-
+    pdf.cell(190, 7, txt(f"Cultura: {cultura} | Area: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
     pdf.ln(5); pdf.cell(190, 8, txt("2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
     pdf.cell(190, 7, txt(f"Calagem: {nc:.2f} t/ha (Total: {total_calc:.2f} t)"), ln=True)
-    pdf.cell(190, 7, txt(f"Demanda NPK (kg/ha): {rec_n:.0f} - {rec_p:.0f} - {rec_k:.0f}"), ln=True)
     
-    if (f_p + f_k) > 0:
+    if cultura == "Milho":
         pdf.set_font("Arial", "B", 11)
-        pdf.cell(190, 7, txt(f"Formulado Sugerido: {f_n}-{f_p}-{f_k}"), ln=True)
-        pdf.cell(190, 7, txt(f"Dose Comercial: {dose_final:.0f} kg/ha | Total: {total_sacos} sacos (50kg)"), ln=True)
-
-    pdf.ln(10); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
-    pdf.cell(190, 8, txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
-    pdf.set_font("Arial", "", 9); pdf.set_text_color(50, 50, 50)
-    pdf.multi_cell(190, 5, txt("- Interpretacao: Embrapa Cerrados | Niveis K: Embrapa Soja/Milho.\n- Exportacao: IPNI Brasil | Metodo: Saturacao por Bases (V%)."))
+        pdf.cell(190, 7, txt(f"MANEJO DE NITROGÊNIO: Total {rec_n:.0f} kg/ha"), ln=True)
+        pdf.set_font("Arial", "", 11)
+        pdf.cell(190, 7, txt(f"  - No Plantio: {n_plantio} kg/ha"), ln=True)
+        pdf.cell(190, 7, txt(f"  - Em Cobertura: {n_cobertura:.0f} kg/ha"), ln=True)
     
+    pdf.cell(190, 7, txt(f"Adubação Plantio: {dose_final:.0f} kg/ha do {f_n}-{f_p}-{f_k}"), ln=True)
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
-if st.button("📄 GERAR RELATÓRIO PROFISSIONAL PDF"):
+if st.button("📄 GERAR RELATÓRIO PDF"):
     pdf_bytes = gerar_pdf()
     st.download_button("⬇️ Baixar Laudo", pdf_bytes, file_name=f"Laudo_{cliente}.pdf")
-
-st.caption("Felipe Amorim | Consultoria Agronômica")
