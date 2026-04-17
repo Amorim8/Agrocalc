@@ -3,45 +3,52 @@ from fpdf import FPDF
 import math
 from datetime import datetime
 
-# ---------------- CONFIG E ESTILO DARK PREMIUM (PADRONIZADO) ----------------
+# ---------------- CONFIG E ESTILO DARK PREMIUM (VERSÃO FINAL) ----------------
 st.set_page_config(page_title="Felipe Amorim | Consultoria", layout="wide", page_icon="🌿")
 
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
     
-    /* PADRONIZAÇÃO DOS QUADROS DE MÉTRICA - ALTURA FIXA E SEM CORTES */
+    /* PADRONIZAÇÃO DOS QUADROS DE MÉTRICA - ALTURA IGUAL E LEITURA CLARA */
     div[data-testid="stMetric"] {
         background-color: #1a1c23 !important;
         border: 1px solid #2e3139;
-        padding: 10px !important;
+        padding: 8px 12px !important;
         border-radius: 8px;
         border-left: 4px solid #28a745 !important;
         
-        /* Força todos os quadros a terem a mesma altura para evitar desorganização */
-        height: 100px !important; 
+        /* Força altura igual em todos os blocos */
+        min-height: 85px !important;
+        max-height: 85px !important;
         display: flex;
         flex-direction: column;
         justify-content: center;
     }
 
-    /* TÍTULO DA MÉTRICA */
+    /* TÍTULO DA MÉTRICA (TEXTO BRANCO E SEM TRANSPARÊNCIA) */
     div[data-testid="stMetricLabel"] > div {
         font-size: 0.8rem !important;
-        color: #aeb0b7 !important;
+        color: #ffffff !important; /* Branco puro para visibilidade */
+        opacity: 1 !important;    /* Remove a transparência padrão */
         white-space: normal !important;
-        line-height: 1.2 !important;
-        height: 32px; /* Espaço fixo para o título */
-        overflow: hidden;
-        text-overflow: clip !important;
+        line-height: 1.1 !important;
+        overflow: visible !important;
+        margin-bottom: 2px;
     }
 
-    /* VALOR DA MÉTRICA (REMOVE RETICÊNCIAS) */
+    /* VALOR DA MÉTRICA */
     div[data-testid="stMetricValue"] > div {
-        font-size: 1.2rem !important;
+        font-size: 1.25rem !important;
         font-weight: bold !important;
         color: #ffffff !important;
-        white-space: nowrap !important;
+        line-height: 1.2 !important;
+    }
+
+    /* AJUSTE DAS COLUNAS PARA ALINHAMENTO PERFEITO */
+    [data-testid="column"] {
+        display: flex;
+        align-items: stretch;
     }
     
     .stButton>button {
@@ -88,7 +95,7 @@ col1, col2, col3 = st.columns(3)
 with col1:
     p_solo = st.number_input("Fósforo (mg/dm³)", 0.0, value=8.0)
     k_solo = st.number_input("Potássio (cmolc/dm³)", 0.0, value=0.15)
-    ph_solo = st.number_input("pH (CaCl2)", 0.0, 14.0, value=5.2)
+    ph_solo = st.number_input("pH (H2O ou CaCl2)", 0.0, 14.0, value=5.2)
 with col2:
     argila = st.number_input("Argila (%)", 0.0, 100.0, value=35.0)
     v_atual = st.number_input("V% Atual", 0.0, 100.0, value=40.0)
@@ -110,14 +117,14 @@ v_alvo = 70 if cultura == "Soja" else 60
 nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
 total_calc = nc * area
 
-# Lógica de Gessagem
+# Lógica de Gessagem (NG)
 m_atual = (al_solo / (al_solo + (ctc - al_solo))) * 100 if (al_solo + (ctc - al_solo)) > 0 else 0
 ng = 0.0
 if m_atual > 20 or al_solo > 0.5:
     ng = (argila * 50) / 1000
 total_gesso = ng * area
 
-# Lógica de N
+# Lógica de NPK
 n_plantio, n_cobertura = 0, 0
 if cultura == "Soja":
     rec_n, rec_p = 0, (meta_ton * 15) * (1.5 if nivel_p == "Baixo" else 1.0)
@@ -129,15 +136,15 @@ else:
     rec_p = (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0)
     rec_k = (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
 
-# ---------------- 2️⃣ DASHBOARD (COM AJUSTE DE COLUNA) ----------------
+# ---------------- 2️⃣ DASHBOARD ----------------
 st.divider()
 st.subheader("2️⃣ Diagnóstico e Metas")
 m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("Textura Solo", classe_txt)
 m2.metric("V% Alvo", f"{v_alvo}%")
-m3.metric("Status P", nivel_p)
-m4.metric("Status K", nivel_k)
-m5.metric("Saturação Al", f"{m_atual:.1f}%")
+m3.metric("Status Fósforo", nivel_p)
+m4.metric("Status Potássio", nivel_k)
+m5.metric("Saturação Al (m%)", f"{m_atual:.1f}%")
 
 # ---------------- 3️⃣ PRESCRIÇÃO E ADUBO ----------------
 st.write("---")
@@ -179,18 +186,18 @@ def gerar_pdf():
     pdf.cell(190, 15, txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
     pdf.set_font("Arial", "", 10); pdf.cell(190, 5, txt(f"Consultor: Felipe Amorim | Data: {datetime.now().strftime('%d/%m/%Y')}"), align="C", ln=True)
     
-    # Dados Gerais
+    # Diagnóstico
     pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
     pdf.cell(190, 8, txt(" 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO"), ln=True, fill=True)
     pdf.set_font("Arial", "", 10)
-    pdf.cell(190, 7, txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Nao informado'} | Fazenda: {fazenda}"), ln=True)
-    pdf.cell(190, 7, txt(f" Cultura: {cultura} | Area: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
+    pdf.cell(190, 7, txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Não informado'} | Fazenda: {fazenda}"), ln=True)
+    pdf.cell(190, 7, txt(f" Cultura: {cultura} | Área: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
     pdf.set_font("Arial", "B", 10)
     pdf.cell(190, 7, txt(f" Solo: pH ({ph_solo}) | P ({nivel_p}) | K ({nivel_k}) | m% ({m_atual:.1f}%) | Textura ({classe_txt})"), ln=True)
     
-    # Prescrição Corretivos
+    # Prescrição
     pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, txt(" 2. PRESCRIÇÃO DE CORRETIVOS"), ln=True, fill=True)
+    pdf.cell(190, 8, txt(" 2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
     pdf.set_font("Arial", "", 10)
     pdf.cell(190, 7, txt(f" Calagem: {nc:.2f} t/ha (Total: {total_calc:.2f} t)"), ln=True)
     pdf.cell(190, 7, txt(f" Gessagem: {ng:.2f} t/ha (Total: {total_gesso:.2f} t)"), ln=True)
@@ -198,7 +205,6 @@ def gerar_pdf():
         pdf.set_font("Arial", "I", 9)
         pdf.cell(190, 5, txt("  * Aplicar gesso a lanco em superficie. Nao e necessaria a incorporacao."), ln=True)
     
-    # Adubação
     pdf.ln(2); pdf.set_font("Arial", "B", 10)
     if cultura == "Milho":
         pdf.cell(190, 7, txt(f" Recomendação de Nitrogênio (N): Total {rec_n:.0f} kg/ha"), ln=True)
@@ -206,10 +212,10 @@ def gerar_pdf():
         pdf.cell(190, 6, txt(f"  - Plantio: {n_plantio} kg/ha | Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
     
     pdf.ln(2); pdf.set_font("Arial", "B", 10)
-    pdf.cell(190, 7, txt(f" Adubação Comercial Sugerida: {dose_final:.0f} kg/ha do {f_n}-{f_p}-{f_k}"), ln=True)
+    pdf.cell(190, 7, txt(f" Adubação Sugerida: {dose_final:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
     pdf.cell(190, 7, txt(f" Necessidade de Compra: {total_sacos} sacos (50kg) para a área total."), ln=True)
 
-    # Fontes
+    # Rodapé
     pdf.ln(10); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
     pdf.cell(190, 8, txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
     pdf.set_font("Arial", "I", 9); pdf.set_text_color(50, 50, 50)
