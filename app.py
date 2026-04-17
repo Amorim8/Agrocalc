@@ -2,8 +2,14 @@ import streamlit as st
 from fpdf import FPDF
 import math
 from datetime import datetime
+import pytz # Necessário para travar a data no horário do Brasil
 
-# ---------------- 1. BLINDAGEM: SISTEMA DE ACESSO ----------------
+# ---------------- 1. BLINDAGEM E AJUSTE DE DATA (BRASÍLIA) ----------------
+def obter_data_brasil():
+    # Força o fuso horário de Brasília para o PDF não sair com a data de amanhã
+    fuso_br = pytz.timezone('America/Sao_Paulo')
+    return datetime.now(fuso_br).strftime('%d/%m/%Y')
+
 def verificar_acesso():
     if "autenticado" not in st.session_state:
         st.session_state["autenticado"] = False
@@ -12,7 +18,7 @@ def verificar_acesso():
         st.markdown("<h1 style='text-align: center;'>🔐 Sistema Felipe Amorim</h1>", unsafe_allow_html=True)
         senha = st.text_input("Digite a Senha de Consultor:", type="password")
         if st.button("Liberar Sistema"):
-            if senha == "@Lipe1928": # SENHA ATUALIZADA AQUI
+            if senha == "@Lipe1928": # SENHA ATUALIZADA
                 st.session_state["autenticado"] = True
                 st.rerun()
             else:
@@ -21,7 +27,10 @@ def verificar_acesso():
     return True
 
 if verificar_acesso():
-    # ---------------- CONFIGURAÇÃO VISUAL ----------------
+    # Captura a data correta de hoje (Brasília)
+    data_hoje = obter_data_brasil()
+
+    # ---------------- CONFIGURAÇÃO VISUAL DARK ----------------
     st.set_page_config(page_title="Felipe Amorim | Consultoria", layout="wide")
 
     st.markdown("""
@@ -46,17 +55,17 @@ if verificar_acesso():
         st.title("Configurações")
         cliente = st.text_input("👨‍🌾 Nome do Cliente:", "")
         fazenda = st.text_input("🏠 Fazenda:", "")
+        talhao = st.text_input("📍 Talhão:", "")
+        st.divider()
         area = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0)
         cultura = st.radio("🌱 Cultura:", ["Soja", "Milho"])
         meta_ton = st.select_slider("🎯 Meta (t/ha):", options=[float(i/2) for i in range(2, 31)], value=8.0 if cultura == "Milho" else 4.0)
 
-    # ---------------- CÁLCULOS TÉCNICOS (O MOTOR DO CÓDIGO) ----------------
-    data_hoje = datetime.now().strftime('%d/%m/%Y')
-    
+    # ---------------- 1️⃣ ANÁLISE DE SOLO (ENTRADA) ----------------
     st.title("SISTEMA DE PRESCRIÇÃO AGRONÔMICA")
     st.write(f"**Consultor:** Felipe Amorim | **Data:** {data_hoje}")
 
-    st.subheader("1️⃣ Análise de Solo")
+    st.subheader("1️⃣ Análise de Solo (Química e Física)")
     col1, col2, col3 = st.columns(3)
     with col1:
         p_solo = st.number_input("Fósforo (mg/dm³)", 0.0, value=8.0)
@@ -68,7 +77,7 @@ if verificar_acesso():
         ctc = st.number_input("CTC (cmolc/dm³)", 0.0, value=3.25)
         prnt = st.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
 
-    # Lógica de Interpretação e Recomendação
+    # Lógica de Interpretação Técnica
     def interpretar_solo(p, k, arg):
         if arg > 35: lim_p = [3, 6, 9, 12]
         else: lim_p = [6, 12, 18, 30]
@@ -81,12 +90,11 @@ if verificar_acesso():
     nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
     total_calc = nc * area
 
-    # Lógica de Nitrogênio (N) - Milho
-    n_plantio, n_cobertura = 0, 0
+    # Lógica de Recomendação de Nutrientes
     if cultura == "Soja":
         rec_n, rec_p = 0, (meta_ton * 15) * (1.5 if nivel_p == "Baixo" else 1.0)
         rec_k = (meta_ton * 20) * (1.4 if nivel_k == "Baixo" else 1.0)
-    else:
+    else: # Milho
         rec_n = meta_ton * 22
         n_plantio = 30
         n_cobertura = max(0.0, rec_n - n_plantio)
@@ -102,20 +110,20 @@ if verificar_acesso():
     m3.metric("Status P", nivel_p)
     m4.metric("Status K", nivel_k)
 
-    # ---------------- 3️⃣ PRESCRIÇÃO E ADUBO ----------------
+    # ---------------- 3️⃣ PRESCRIÇÃO E FERTILIZANTES ----------------
     st.write("---")
     st.subheader("3️⃣ Planejamento de Fertilizantes")
     r1, r2 = st.columns([1, 2])
     with r1:
         st.markdown("### 🪨 Calagem")
         st.metric("Dose (t/ha)", f"{nc:.2f}")
-        st.write(f"Total: **{total_calc:.2f} t**")
+        st.write(f"Total para a área: **{total_calc:.2f} t**")
     with r2:
         if cultura == "Milho":
             nc1, nc2, nc3 = st.columns(3)
             nc1.metric("Total N", f"{rec_n:.0f} kg")
-            nc2.metric("Plantio", f"{n_plantio} kg")
-            nc3.metric("Cobertura", f"{n_cobertura:.0f} kg")
+            nc2.metric("N Plantio", f"{n_plantio} kg")
+            nc3.metric("N Cobertura", f"{n_cobertura:.0f} kg")
         
         st.markdown("### 🛒 Formulação Comercial")
         cn, cp, ck = st.columns(3)
@@ -126,7 +134,7 @@ if verificar_acesso():
         if f_p > 0 or f_k > 0:
             dose_final = max((rec_p/f_p*100) if f_p>0 else 0, (rec_k/f_k*100) if f_k>0 else 0)
             total_sacos = math.ceil((dose_final * area) / 50)
-            st.success(f"Dose Recomendada: **{dose_final:.0f} kg/ha** | Total: **{total_sacos} sacos**")
+            st.success(f"Dose Recomendada: **{dose_final:.0f} kg/ha** | Total: **{total_sacos} sacos (50kg)**")
 
     # ---------------- 4️⃣ PDF RELATÓRIO PROFISSIONAL ----------------
     def gerar_pdf():
@@ -161,12 +169,14 @@ if verificar_acesso():
             pdf.set_font("Arial", "", 10)
             pdf.cell(190, 6, txt(f"  - Aplicacao no Plantio: {n_plantio} kg/ha"), ln=True)
             pdf.cell(190, 6, txt(f"  - Aplicacao em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
+        else:
+            pdf.cell(190, 7, txt(" Recomendacao de Nitrogenio: Via Inoculacao Bradyrhizobium."), ln=True)
         
         pdf.ln(2); pdf.set_font("Arial", "B", 10)
         pdf.cell(190, 7, txt(f" Adubacao Sugerida: {dose_final:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
         pdf.cell(190, 7, txt(f" Necessidade de Compra: {total_sacos} sacos (50kg) para a area total."), ln=True)
 
-        # Rodapé com Fontes
+        # Fontes
         pdf.ln(15); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
         pdf.cell(190, 8, txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
         pdf.set_font("Arial", "I", 9); pdf.set_text_color(50, 50, 50)
@@ -177,7 +187,8 @@ if verificar_acesso():
     st.divider()
     if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
         pdf_bytes = gerar_pdf()
-        nome_arquivo = f"Relatorio_{cliente.replace(' ', '_')}.pdf" if cliente else "Relatorio_FelipeAmorim.pdf"
+        # Nome do arquivo de download dinâmico e limpo
+        nome_arquivo = f"Relatorio_{cliente.replace(' ', '_')}.pdf" if cliente else f"Relatorio_FelipeAmorim_{data_hoje.replace('/', '-')}.pdf"
         st.download_button("⬇️ Baixar Agora", pdf_bytes, file_name=nome_arquivo)
 
-    st.caption("Felipe Amorim | Consultoria Agronômica")
+    st.caption(f"Felipe Amorim | Consultoria Agronômica | {data_hoje}")
