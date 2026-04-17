@@ -160,54 +160,58 @@ with r3:
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
-    def txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
+    # Usando latin-1 para suportar acentos corretamente no FPDF
+    def fix_txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
     
+    # Cabeçalho
     pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
-    pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 15, txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
-    pdf.set_font("Arial", "", 10); pdf.cell(190, 5, txt(f"Consultor: Felipe Amorim | Data: {datetime.now().strftime('%d/%m/%Y')}"), align="C", ln=True)
+    pdf.set_text_color(255, 255, 255); pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(190, 15, fix_txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
+    pdf.set_font("Helvetica", "", 10); pdf.cell(190, 5, fix_txt(f"Consultor: Felipe Amorim | Data: {datetime.now().strftime('%d/%m/%Y')}"), align="C", ln=True)
     
-    pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, txt(" 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO"), ln=True, fill=True)
-    pdf.set_font("Arial", "", 10)
-    # LINHA CORRIGIDA ABAIXO
-    pdf.cell(190, 7, txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Nao informado'} | Fazenda: {fazenda}"), ln=True)
-    pdf.cell(190, 7, txt(f" Cultura: {cultura} | Area: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(190, 7, txt(f" Status Solo: pH ({ph_solo}) | Aluminio ({al_solo}) | Textura ({classe_txt})"), ln=True)
+    # Dados Gerais
+    pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(190, 8, fix_txt(" 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(190, 7, fix_txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Não informado'} | Fazenda: {fazenda}"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Cultura: {cultura} | Área: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 7, fix_txt(f" Status Solo: pH ({ph_solo}) | Alumínio ({al_solo}) | Textura ({classe_txt})"), ln=True)
     
-    pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, txt(" 2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(190, 7, txt(f" Calagem: {nc:.2f} t/ha (Total para a área: {total_calc:.2f} t)"), ln=True)
-    pdf.cell(190, 7, txt(f" Gessagem: {ng:.2f} t/ha (Total para a área: {total_gesso:.2f} t)"), ln=True)
+    # Prescrição Técnica
+    pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(190, 8, fix_txt(" 2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(190, 7, fix_txt(f" Calagem: {nc:.2f} t/ha (Total para a área: {total_calc:.2f} t)"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Gessagem: {ng:.2f} t/ha (Total para a área: {total_gesso:.2f} t)"), ln=True)
     
     if cultura == "Milho":
-        pdf.set_font("Arial", "B", 10)
-        pdf.cell(190, 7, txt(f" Recomendação de Nitrogênio (N): Total {rec_n:.0f} kg/ha"), ln=True)
-        pdf.set_font("Arial", "", 10)
-        pdf.cell(190, 6, txt(f"  - Aplicação no Plantio: {n_plantio} kg/ha"), ln=True)
-        pdf.cell(190, 6, txt(f"  - Aplicação em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(190, 7, fix_txt(f" Recomendação de Nitrogênio (N): Total {rec_n:.0f} kg/ha"), ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(190, 6, fix_txt(f"  - Aplicação no Plantio: {n_plantio} kg/ha"), ln=True)
+        pdf.cell(190, 6, fix_txt(f"  - Aplicação em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
     
-    pdf.set_font("Arial", "B", 10); pdf.ln(2)
-    # Cálculo para exibição no PDF garantindo que as variáveis existam
+    pdf.set_font("Helvetica", "B", 10); pdf.ln(2)
     d_p = (rec_p / f_p * 100) if f_p > 0 else 0
     d_k = (rec_k / f_k * 100) if f_k > 0 else 0
     d_final_pdf = max(d_p, d_k)
     t_sacos_pdf = math.ceil((d_final_pdf * area) / 50)
     
-    pdf.cell(190, 7, txt(f" Adubação Sugerida: {d_final_pdf:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
-    pdf.cell(190, 7, txt(f" Necessidade de Compra: {t_sacos_pdf} sacos (50kg) para a área total."), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Adubação Sugerida: {d_final_pdf:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Necessidade de Compra: {t_sacos_pdf} sacos (50kg) para a área total."), ln=True)
 
-    pdf.ln(10); pdf.set_fill_color(255, 235, 235); pdf.set_font("Arial", "B", 9)
-    pdf.cell(190, 7, txt(" NOTA DE RESPONSABILIDADE TÉCNICA"), ln=True, fill=True)
-    pdf.set_font("Arial", "I", 8); pdf.set_text_color(100, 0, 0)
-    pdf.multi_cell(190, 4, txt("Esta recomendacao baseia-se exclusivamente nos dados fornecidos pelo usuario. O sucesso da cultura depende de fatores climaticos, fitossanitarios e do manejo correto no campo. O consultor nao se responsabiliza por aplicacoes feitas sem supervisao tecnica presencial adequada."))
+    # Nota de Responsabilidade com Acentos
+    pdf.ln(10); pdf.set_fill_color(255, 235, 235); pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(190, 7, fix_txt(" NOTA DE RESPONSABILIDADE TÉCNICA"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(100, 0, 0)
+    pdf.multi_cell(190, 4, fix_txt("Esta recomendação baseia-se exclusivamente nos dados fornecidos pelo usuário. O sucesso da cultura depende de fatores climáticos, fitossanitários e do manejo correto no campo. O consultor não se responsabiliza por aplicações feitas sem supervisão técnica presencial adequada."))
 
-    pdf.ln(5); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
-    pdf.cell(190, 8, txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
-    pdf.set_font("Arial", "I", 9); pdf.set_text_color(50, 50, 50)
-    pdf.multi_cell(190, 5, txt("- Interpretacao de Solo: Embrapa Cerrados / Embrapa Soja.\n- Exportacao e Extracao: IPNI Brasil.\n- Manejo N: Boletim 100 / Embrapa Milho e Sorgo.\n- Calagem: Metodo da Elevacao da Saturacao por Bases (V%)."))
+    # Fontes
+    pdf.ln(5); pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(34, 139, 34)
+    pdf.cell(190, 8, fix_txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
+    pdf.set_font("Helvetica", "I", 9); pdf.set_text_color(50, 50, 50)
+    pdf.multi_cell(190, 5, fix_txt("- Interpretação de Solo: Embrapa Cerrados / Embrapa Soja.\n- Exportação e Extração: IPNI Brasil.\n- Manejo N: Boletim 100 / Embrapa Milho e Sorgo.\n- Calagem: Método da Elevação da Saturação por Bases (V%)."))
     
     return pdf.output(dest='S').encode('latin-1')
 
