@@ -97,17 +97,14 @@ def interpretar_solo(p, k, arg):
 
 classe_txt, nivel_p, nivel_k = interpretar_solo(p_solo, k_solo, argila)
 
-# Calagem
 v_alvo = 70 if cultura == "Soja" else 60
 nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
 total_calc = nc * area
 
-# Gessagem (Cálculo sugerido baseado na textura)
 m_atual = (al_solo / (al_solo + (ctc - al_solo))) * 100 if (al_solo + (ctc - al_solo)) > 0 else 0
 ng = (argila * 50) / 1000 if (m_atual > 20 or al_solo > 0.5) else 0.0
 total_gesso = ng * area
 
-# Lógica de NPK original
 n_plantio, n_cobertura = 0, 0
 if cultura == "Soja":
     rec_n, rec_p = 0, (meta_ton * 15) * (1.5 if nivel_p == "Baixo" else 1.0)
@@ -163,50 +160,12 @@ def gerar_pdf():
     pdf.add_page()
     def txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
     
-    # Cabeçalho
     pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", "B", 16)
     pdf.cell(190, 15, txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
     pdf.set_font("Arial", "", 10); pdf.cell(190, 5, txt(f"Consultor: Felipe Amorim | Data: {datetime.now().strftime('%d/%m/%Y')}"), align="C", ln=True)
     
-    # Dados Gerais e Diagnóstico
     pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
     pdf.cell(190, 8, txt(" 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO"), ln=True, fill=True)
     pdf.set_font("Arial", "", 10)
-    pdf.cell(190, 7, txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Nao informado'} | Fazenda: {fazenda}"), ln=True)
-    pdf.cell(190, 7, txt(f" Cultura: {cultura} | Area: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(190, 7, txt(f" Status Solo: pH ({ph_solo}) | Aluminio ({al_solo}) | Textura ({classe_txt})"), ln=True)
-    
-    # Prescrição
-    pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, txt(" 2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(190, 7, txt(f" Calagem: {nc:.2f} t/ha (Total para a área: {total_calc:.2f} t)"), ln=True)
-    pdf.cell(190, 7, txt(f" Gessagem: {ng:.2f} t/ha (Total para a área: {total_gesso:.2f} t)"), ln=True)
-    
-    if cultura == "Milho":
-        pdf.set_font("Arial", "B", 10)
-        pdf.cell(190, 7, txt(f" Recomendação de Nitrogênio (N): Total {rec_n:.0f} kg/ha"), ln=True)
-        pdf.set_font("Arial", "", 10)
-        pdf.cell(190, 6, txt(f"  - Aplicação no Plantio: {n_plantio} kg/ha"), ln=True)
-        pdf.cell(190, 6, txt(f"  - Aplicação em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
-    
-    pdf.set_font("Arial", "B", 10); pdf.ln(2)
-    pdf.cell(190, 7, txt(f" Adubação Sugerida: {dose_final:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
-    pdf.cell(190, 7, txt(f" Necessidade de Compra: {total_sacos} sacos (50kg) para a área total."), ln=True)
-
-    # Fontes (Mantendo as referências originais)
-    pdf.ln(10); pdf.set_font("Arial", "B", 10); pdf.set_text_color(34, 139, 34)
-    pdf.cell(190, 8, txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
-    pdf.set_font("Arial", "I", 9); pdf.set_text_color(50, 50, 50)
-    pdf.multi_cell(190, 5, txt("- Interpretacao de Solo: Embrapa Cerrados / Embrapa Soja.\n- Exportacao e Extracao: IPNI Brasil.\n- Manejo N: Boletim 100 / Embrapa Milho e Sorgo.\n- Calagem: Metodo da Elevacao da Saturacao por Bases (V%)."))
-    
-    return pdf.output(dest='S').encode('latin-1')
-
-st.divider()
-if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
-    pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{nome_para_arquivo}.pdf")
-
-st.caption("Felipe Amorim | Consultoria Agronômica")
+    pdf.cell(190, 7, txt(f" Cliente: {nome_cliente_input if nome_cliente_
