@@ -3,6 +3,23 @@ from fpdf import FPDF
 import math
 from datetime import datetime
 
+# ---------------- SISTEMA DE ACESSO (SENHA) ----------------
+if 'autenticado' not in st.session_state:
+    st.session_state['autenticado'] = False
+
+if not st.session_state['autenticado']:
+    st.markdown("<h2 style='text-align: center;'>🔐 Acesso Restrito</h2>", unsafe_allow_html=True)
+    senha = st.text_input("Digite a senha para acessar o sistema:", type="password")
+    if st.button("Entrar"):
+        if senha == "@Lipe1928":
+            st.session_state['autenticado'] = True
+            st.rerun()
+        else:
+            st.error("Senha incorreta!")
+    st.stop()
+
+# ---------------- SEU CÓDIGO ORIGINAL ABAIXO ----------------
+
 # ---------------- CONFIG E ESTILO DARK PREMIUM ----------------
 st.set_page_config(page_title="Felipe Amorim | Consultoria", layout="wide", page_icon="🌿")
 
@@ -35,7 +52,6 @@ st.markdown("""
 with st.sidebar:
     st.markdown("<h1 style='text-align: center;'>🌿</h1>", unsafe_allow_html=True)
     st.title("Configurações")
-    # Removi o "Exemplo" do padrão para facilitar
     nome_cliente_input = st.text_input("👨‍🌾 Nome do Cliente:", "")
     fazenda = st.text_input("🏠 Fazenda:", "")
     talhao = st.text_input("📍 Talhão:", "")
@@ -52,7 +68,6 @@ with st.sidebar:
         value=4.0 if cultura == "Soja" else 8.0
     )
 
-# Determina o nome para o arquivo (evita o "Exemplo")
 nome_para_arquivo = nome_cliente_input.replace(" ", "_") if nome_cliente_input else "Cliente"
 
 # ---------------- CABEÇALHO ----------------
@@ -179,7 +194,6 @@ def gerar_pdf():
 st.divider()
 if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
     pdf_bytes = gerar_pdf()
-    # Nome do arquivo agora é dinâmico e sem o "Exemplo" fixo
     st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{nome_para_arquivo}.pdf")
 
 st.caption("Felipe Amorim | Consultoria Agronômica")
