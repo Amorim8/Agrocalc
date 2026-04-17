@@ -51,89 +51,116 @@ with st.sidebar:
     
     st.divider()
     
-    # 1. Escolha a Cultura Principal
-    cultura_selecionada = st.selectbox("🌱 Selecione a Cultura:", ["Selecione...", "Palma Forrageira", "Soja", "Milho"])
+    # Agora o Milho vem primeiro e está ativo
+    cultura_selecionada = st.selectbox("🌱 Selecione a Cultura:", ["Milho", "Soja", "Palma Forrageira"])
     
-    # 2. Se for Palma, abre as opções específicas que você pediu
-    if cultura_selecionada == "Palma Forrageira":
-        st.subheader("Opções de Palma")
-        variedade = st.radio("🧬 Escolha o Tipo:", ["Orelha de Elefante (Mexicana)", "Palma Miúda (Doce)"])
-        meta_producao = st.select_slider("🎯 Meta de Produção (t/ha/ano):", options=[40, 60, 80, 100, 150, 200], value=80)
-    elif cultura_selecionada == "Selecione...":
-        st.info("Por favor, selecione uma cultura para iniciar.")
-    else:
-        st.warning(f"Módulo de {cultura_selecionada} em desenvolvimento.")
+    if cultura_selecionada == "Milho":
+        meta_prod = st.select_slider("🎯 Meta (Sacos/ha):", options=[60, 80, 100, 120, 150, 180, 200], value=120)
+    elif cultura_selecionada == "Soja":
+        meta_prod = st.select_slider("🎯 Meta (Sacos/ha):", options=[40, 50, 60, 70, 80, 90], value=60)
+    elif cultura_selecionada == "Palma Forrageira":
+        variedade = st.radio("🧬 Tipo de Palma:", ["Orelha de Elefante (Mexicana)", "Palma Miúda (Doce)"])
+        meta_prod = st.select_slider("🎯 Meta (t/ha/ano):", options=[40, 80, 120, 150, 200], value=80)
 
-# ---------------- CORPO PRINCIPAL DO SISTEMA ----------------
+# ---------------- CORPO PRINCIPAL ----------------
 st.title("SISTEMA DE CONSULTORIA AGRONÔMICA")
 st.write(f"**Agrônomo:** Felipe Amorim | **Redenção do Gurguéia - PI**")
 
-if cultura_selecionada != "Selecione...":
-    st.subheader(f"📋 Análise de Solo e Prescrição: {cultura_selecionada}")
+st.subheader(f"📋 Análise de Solo e Prescrição: {cultura_selecionada}")
+
+# Entrada de Dados da Análise
+col1, col2, col3 = st.columns(3)
+with col1:
+    p_solo = st.number_input("Fósforo (mg/dm³)", 0.0, value=10.0)
+    k_solo = st.number_input("Potássio (cmolc/dm³)", 0.0, value=0.15)
+    ph_solo = st.number_input("pH do Solo", 0.0, 14.0, value=5.5)
+with col2:
+    argila = st.number_input("Argila (%)", 0.0, 100.0, value=30.0)
+    v_atual = st.number_input("V% Atual", 0.0, 100.0, value=40.0)
+    al_solo = st.number_input("Alumínio (cmolc/dm³)", 0.0, value=0.0)
+with col3:
+    ctc = st.number_input("CTC (cmolc/dm³)", 0.0, value=5.0)
+    prnt = st.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
+
+# ---------------- LÓGICA DE CÁLCULO POR CULTURA ----------------
+if cultura_selecionada == "Milho":
+    v_alvo = 60
+    rec_n = meta_prod * 1.2  # Estimativa p/ milho
+    rec_p = 90 if p_solo < 15 else 50
+    rec_k = 80 if k_solo < 0.2 else 40
+    dose_esterco = 0 # Geralmente não usado em larga escala no milho grão
+
+elif cultura_selecionada == "Soja":
+    v_alvo = 70
+    rec_n = 0 # Soja faz fixação biológica (FBN)
+    rec_p = 100 if p_solo < 10 else 60
+    rec_k = 120 if k_solo < 0.15 else 80
+    dose_esterco = 0
+
+elif cultura_selecionada == "Palma Forrageira":
+    v_alvo = 70
+    base_n = 150 if meta_prod >= 100 else 100
+    rec_n = base_n * (1.2 if variedade == "Orelha de Elefante (Mexicana)" else 1.0)
+    rec_p = 80 if p_solo < 10 else 40
+    rec_k = 180 if k_solo < 0.15 else 100
+    dose_esterco = 25 if meta_prod >= 100 else 15
+
+# Cálculo Calagem comum
+nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
+total_calc = nc * area
+
+# ---------------- EXIBIÇÃO DE RESULTADOS ----------------
+st.divider()
+st.subheader(f"📊 Recomendação Técnica")
+r1, r2, r3, r4 = st.columns(4)
+r1.metric("Calcário (t/ha)", f"{nc:.2f}")
+r2.metric("Esterco (t/ha)", f"{dose_esterco}")
+r3.metric("Nitrogênio (kg N/ha)", f"{rec_n:.0f}")
+r4.metric("Potássio (kg K2O/ha)", f"{rec_k:.0f}")
+
+# ---------------- CÁLCULO ADUBAÇÃO COMERCIAL ----------------
+st.write("---")
+st.subheader("🛒 Cálculo de Adubos Comerciais")
+cu, ck = st.columns(2)
+f_n = cu.number_input("Teor de N no adubo (%)", 1, value=45 if cultura_selecionada != "Soja" else 1)
+f_k = ck.number_input("Teor de K2O no adubo (%)", 1, value=60)
+
+dose_n_c = (rec_n / f_n) * 100 if rec_n > 0 else 0
+dose_k_c = (rec_k / f_k) * 100
+st.success(f"Dose sugerida: {dose_n_c:.0f} kg/ha de adubo N e {dose_k_c:.0f} kg/ha de adubo K.")
+
+# ---------------- GERADOR DE PDF ----------------
+def gerar_pdf():
+    pdf = FPDF()
+    pdf.add_page()
+    def fix(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
     
-    # Entrada de Dados da Análise
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        p_solo = st.number_input("Fósforo (mg/dm³)", 0.0, value=5.0)
-        k_solo = st.number_input("Potássio (cmolc/dm³)", 0.0, value=0.10)
-        ph_solo = st.number_input("pH do Solo", 0.0, 14.0, value=5.0)
-    with col2:
-        argila = st.number_input("Argila (%)", 0.0, 100.0, value=25.0)
-        v_atual = st.number_input("V% Atual", 0.0, 100.0, value=30.0)
-        al_solo = st.number_input("Alumínio (cmolc/dm³)", 0.0, value=0.5)
-    with col3:
-        ctc = st.number_input("CTC (cmolc/dm³)", 0.0, value=4.0)
-        prnt = st.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
-
-    # Lógica de Cálculo (Ativada se for Palma)
+    pdf.set_fill_color(30, 30, 30); pdf.rect(0, 0, 210, 40, 'F')
+    pdf.set_text_color(255, 255, 255); pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(190, 15, fix("LAUDO DE RECOMENDAÇÃO AGRONÔMICA"), align="C", ln=True)
+    pdf.set_font("Helvetica", "", 10); pdf.cell(190, 5, fix(f"Agrônomo: Felipe Amorim | Cultura: {cultura_selecionada}"), align="C", ln=True)
+    
+    pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(240, 240, 240); pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(190, 8, fix(f" 1. DIAGNÓSTICO E PRESCRIÇÃO"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(190, 7, fix(f" Cliente: {nome_cliente} | Fazenda: {fazenda} | Área: {area:.2f} ha"), ln=True)
+    pdf.cell(190, 7, fix(f" - Necessidade de Calcário: {nc:.2f} t/ha | V% Alvo: {v_alvo}%"), ln=True)
+    pdf.cell(190, 7, fix(f" - Adubação Mineral Sugerida: N:{rec_n:.0f} P:{rec_p:.0f} K:{rec_k:.0f} (kg/ha)"), ln=True)
+    
     if cultura_selecionada == "Palma Forrageira":
-        v_alvo = 70
-        nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
-        total_calc = nc * area
-        
-        base_n = 150 if meta_producao >= 100 else 100
-        rec_n = base_n * (1.2 if variedade == "Orelha de Elefante (Mexicana)" else 1.0)
-        rec_p = 80 if p_solo < 10 else 40
-        rec_k = 180 if k_solo < 0.15 else 100
-        dose_esterco = 30 if meta_producao >= 100 else 20
+        pdf.ln(3); pdf.set_fill_color(240, 240, 240); pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(190, 8, fix(" 2. MANEJO TÉCNICO DE CORTE"), ln=True, fill=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(190, 6, fix("- Primeiro corte: 24-36 meses.\n- Preservar matriz e primárias.\n- Corte inclinado com toco de 2 cm."))
+    elif cultura_selecionada == "Soja":
+        pdf.ln(3); pdf.set_font("Helvetica", "I", 10)
+        pdf.multi_cell(190, 6, fix("Obs: Para Soja, priorizar a inoculação com Bradyrhizobium para suprimento de Nitrogênio."))
 
-        # Resultados na Tela
-        st.divider()
-        st.subheader(f"📊 Recomendações Técnicas - {variedade}")
-        r1, r2, r3, r4 = st.columns(4)
-        r1.metric("Calcário (t/ha)", f"{nc:.2f}")
-        r2.metric("Esterco (t/ha)", f"{dose_esterco}")
-        r3.metric("Nitrogênio (kg N/ha)", f"{rec_n:.0f}")
-        r4.metric("Potássio (kg K2O/ha)", f"{rec_k:.0f}")
+    return pdf.output(dest='S').encode('latin-1')
 
-        # PDF Funcional
-        def gerar_pdf():
-            pdf = FPDF()
-            pdf.add_page()
-            def fix(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
-            
-            pdf.set_fill_color(40, 40, 40); pdf.rect(0, 0, 210, 40, 'F')
-            pdf.set_text_color(255, 255, 255); pdf.set_font("Helvetica", "B", 16)
-            pdf.cell(190, 15, fix("LAUDO DE RECOMENDAÇÃO AGRONÔMICA"), align="C", ln=True)
-            pdf.set_font("Helvetica", "", 10); pdf.cell(190, 5, fix(f"Agrônomo: Felipe Amorim | {cultura_selecionada}"), align="C", ln=True)
-            
-            pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(240, 240, 240); pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(190, 8, fix(f" 1. DADOS E PRESCRIÇÃO - {variedade.upper()}"), ln=True, fill=True)
-            pdf.set_font("Helvetica", "", 10)
-            pdf.cell(190, 7, fix(f" Cliente: {nome_cliente} | Fazenda: {fazenda} | Área: {area:.2f} ha"), ln=True)
-            pdf.cell(190, 7, fix(f" - Calcário: {nc:.2f} t/ha | Esterco Bovino: {dose_esterco} t/ha"), ln=True)
-            pdf.cell(190, 7, fix(f" - Nutrição (N-P-K): {rec_n:.0f}-{rec_p:.0f}-{rec_k:.0f} kg/ha"), ln=True)
-            
-            pdf.ln(5); pdf.set_fill_color(240, 240, 240); pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(190, 8, fix(" 2. INSTRUÇÕES TÉCNICAS DE MANEJO"), ln=True, fill=True)
-            pdf.set_font("Helvetica", "", 10)
-            pdf.multi_cell(190, 6, fix("- COLHEITA: Realizar entre 24 a 36 meses.\n- PRESERVAÇÃO: Proibido cortar raquete mãe e primárias.\n- TÉCNICA: Corte inclinado, deixar toco de 2 a 3 cm na base."))
-
-            return pdf.output(dest='S').encode('latin-1')
-
-        st.divider()
-        if st.button("📄 GERAR RELATÓRIO"):
-            pdf_bytes = gerar_pdf()
-            st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Laudo_{nome_cliente}.pdf")
+st.divider()
+if st.button("📄 GERAR LAUDO COMPLETO"):
+    pdf_bytes = gerar_pdf()
+    st.download_button("⬇️ Baixar Laudo", pdf_bytes, file_name=f"Laudo_{cultura_selecionada}_{nome_cliente}.pdf")
 
 st.caption("Felipe Amorim | Engenheiro Agrônomo")
