@@ -57,7 +57,8 @@ with st.sidebar:
     estado = st.selectbox("🌎 Estado:", ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"])
     
     st.divider()
-    area = st.number_input("📏 Área Total (ha):", min_value=0.001, value=1.0, step=0.001, format="%.3f")
+    # Ajuste de step e formato para não confundir 1ha com 1000ha
+    area = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.1)
     cultura = st.radio("🌱 Cultura:", ["Soja", "Milho", "Palma"], horizontal=True)
 
     if cultura == "Palma":
@@ -74,7 +75,6 @@ st.write(f"Consultor: Felipe Amorim | Data: {data_hoje}")
 # ---------------- ANÁLISE DE SOLO ----------------
 st.subheader("Análise de Solo")
 c1, c2, c3 = st.columns(3)
-
 with c1:
     p = st.number_input("Fósforo (mg/dm³)", value=8.0)
     k = st.number_input("Potássio (cmolc/dm³)", value=0.15)
@@ -95,12 +95,15 @@ total_calc = nc * area
 ng = (50 * arg)/1000 if (al > 0.5 or arg > 40) else 0
 total_gesso = ng * area
 
-# Adubação NPK
 rec_p = meta_ton * 15
 rec_k = meta_ton * 20
+
+# Lógica de Nitrogênio (N) para Milho
 rec_n = meta_ton * 25 if cultura == "Milho" else 0
 n_plantio = rec_n * 0.2
 n_cobertura = rec_n * 0.8
+n_plantio_total = n_plantio * area
+n_cobertura_total = n_cobertura * area
 
 st.subheader("Configuração do Adubo")
 a1, a2, a3 = st.columns(3)
@@ -112,18 +115,37 @@ dose_final = max((rec_p/f_p*100) if f_p>0 else 0, (rec_k/f_k*100) if f_k>0 else 
 total_adubo = dose_final * area
 sacos = math.ceil(total_adubo / 50)
 
-# ---------------- RESULTADOS EM TELA ----------------
+# ---------------- RESULTADOS VISUAIS (CALCULADORA) ----------------
 st.subheader("Resultados da Recomendação")
 r1, r2, r3 = st.columns(3)
-r1.metric("Calcário (t/ha)", f"{nc:.2f}")
-r1.metric("Total Calcário (t)", f"{total_calc:.2f}")
-r2.metric("Gesso (t/ha)", f"{ng:.2f}")
-r2.metric("Total Gesso (t)", f"{total_gesso:.2f}")
-r3.metric("Adubo (kg/ha)", f"{dose_final:.0f}")
-r3.metric("Total Adubo (kg)", f"{total_adubo:.0f}")
+
+with r1:
+    st.metric("Calcário (t/ha)", f"{nc:.2f}")
+    st.metric("Total Calcário (t)", f"{total_calc:.2f}")
+
+with r2:
+    st.metric("Gesso (t/ha)", f"{ng:.2f}")
+    st.metric("Total Gesso (t)", f"{total_gesso:.2f}")
+
+with r3:
+    st.metric("Adubo (kg/ha)", f"{dose_final:.0f}")
+    st.metric("Total Adubo (kg)", f"{total_adubo:.0f}")
+
+# EXIBIÇÃO DO NITROGÊNIO NA CALCULADORA PARA MILHO
+if cultura == "Milho":
+    st.divider()
+    st.subheader("📊 Manejo de Nitrogênio - Milho")
+    col_n1, col_n2 = st.columns(2)
+    with col_n1:
+        st.metric("N no Plantio (kg/ha)", f"{n_plantio:.1f}")
+        st.metric("Total N Plantio (kg)", f"{n_plantio_total:.1f}")
+    with col_n2:
+        st.metric("N na Cobertura (kg/ha)", f"{n_cobertura:.1f}")
+        st.metric("Total N Cobertura (kg)", f"{n_cobertura_total:.1f}")
+
 st.success(f"Quantidade estimada: {sacos} sacos de 50kg")
 
-# ---------------- FUNÇÃO PDF ----------------
+# ---------------- FUNÇÃO GERAR PDF ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
@@ -151,12 +173,15 @@ def gerar_pdf():
     pdf.cell(95, 7, fix(f"Cliente: {nome_cliente_input}"), 0, 0)
     pdf.cell(95, 7, fix(f"Fazenda: {fazenda}"), 0, 1)
     pdf.cell(190, 7, fix(f"Local: {municipio} - {estado}"), 0, 1)
-    pdf.cell(190, 7, fix(f"Área Total: {area:.3f} ha | Cultura: {cultura}"), 0, 1)
+    
+    # Formatação da área no PDF para evitar o "1.000"
+    area_txt = f"{area:g}" 
+    pdf.cell(190, 7, fix(f"Área: {area_txt} ha | Cultura: {cultura}"), 0, 1)
 
-    # 2. Correção e Nitrogênio
+    # 2. Correção e Manejo
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(190, 8, fix("2. RECOMENDAÇÃO DE CORREÇÃO E N"), 0, 1, "L", fill=True)
+    pdf.cell(190, 8, fix("2. CORREÇÃO E NUTRIÇÃO"), 0, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 11)
     pdf.ln(2)
     pdf.cell(190, 7, fix(f"Calcário: {nc:.2f} t/ha | Total: {total_calc:.2f} t"), 0, 1)
@@ -167,8 +192,8 @@ def gerar_pdf():
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(190, 7, fix("Manejo Nitrogenado (N):"), 0, 1)
         pdf.set_font("Helvetica", "", 11)
-        pdf.cell(190, 6, fix(f"- Aplicação no Plantio: {n_plantio:.1f} kg/ha de N"), 0, 1)
-        pdf.cell(190, 6, fix(f"- Aplicação em Cobertura: {n_cobertura:.1f} kg/ha de N"), 0, 1)
+        pdf.cell(190, 6, fix(f"- Plantio: {n_plantio:.1f} kg/ha (Total: {n_plantio_total:.1f} kg)"), 0, 1)
+        pdf.cell(190, 6, fix(f"- Cobertura: {n_cobertura:.1f} kg/ha (Total: {n_cobertura_total:.1f} kg)"), 0, 1)
 
     # 3. Sugestões e Observações
     pdf.ln(5)
@@ -178,13 +203,13 @@ def gerar_pdf():
     pdf.ln(2)
 
     if cultura == "Palma":
-        pdf.multi_cell(190, 5, fix(f"- Variedade: {variedade}\n- Aplicar 20 a 30 t/ha de esterco bovino curtido.\n- Não realizar o corte do cladódio mãe.\n- Realizar controle de cochonilha-do-carmim se necessário."))
+        pdf.multi_cell(190, 5, fix(f"- Variedade: {variedade}\n- Aplicar 20 a 30 t/ha de esterco bovino curtido.\n- Recomendação exclusiva pelos dados que foram inseridos."))
     elif cultura == "Milho":
-        pdf.multi_cell(190, 5, fix("- Recomendação exclusiva baseada nos dados inseridos.\n- Aplicar cobertura nitrogenada entre V4 e V6.\n- Atentar para o monitoramento de percevejos e lagartas."))
+        pdf.multi_cell(190, 5, fix("- Recomendação exclusiva pelos dados que foram inseridos.\n- Aplicar N de cobertura preferencialmente entre V4 e V6.\n- Monitorar umidade do solo para maximizar a absorção."))
     elif cultura == "Soja":
-        pdf.multi_cell(190, 5, fix("- Realizar a inoculação e co-inoculação das sementes.\n- Monitorar a ocorrência de ferrugem asiática.\n- Recomendação exclusiva com foco em alta produtividade."))
+        pdf.multi_cell(190, 5, fix("- Recomendação exclusiva pelos dados que foram inseridos.\n- Realizar inoculação com Bradyrhizobium.\n- Monitorar pragas e doenças desde o estágio inicial."))
 
-    # 4. Referências Técnicas
+    # 4. Referências
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(190, 7, fix("REFERÊNCIAS TÉCNICAS"), 0, 1)
@@ -197,12 +222,12 @@ def gerar_pdf():
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(190, 7, fix("NOTA DE RESPONSABILIDADE TÉCNICA"), 0, 1, fill=True)
     pdf.set_font("Helvetica", "", 8)
-    pdf.multi_cell(190, 4, fix("Esta recomendação é baseada exclusivamente nos dados fornecidos pelo usuário. O sucesso da produção depende de fatores climáticos e da correta execução do manejo no campo."))
+    pdf.multi_cell(190, 4, fix("Esta recomendação é baseada nos dados técnicos informados. O consultor não se responsabiliza por variações climáticas ou falhas na execução do manejo sugerido."))
 
     return pdf.output(dest='S').encode('latin-1')
 
 # ---------------- BOTÃO FINAL ----------------
 st.divider()
-if st.button("📄 Gerar Relatório Completo"):
+if st.button("📄 Gerar Relatório Final"):
     pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Baixar PDF Agora", pdf_bytes, file_name=f"Relatorio_{nome_para_arquivo}.pdf", mime="application/pdf")
+    st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Prescricao_{nome_para_arquivo}.pdf", mime="application/pdf")
