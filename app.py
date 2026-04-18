@@ -12,7 +12,7 @@ if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
 
 if not st.session_state['autenticado']:
-    st.markdown("<h2 style='text-align: center;'>🔐 Acesso Restrito</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: white;'>🔐 Acesso Restrito</h2>", unsafe_allow_html=True)
     senha = st.text_input("Digite a senha para acessar o sistema:", type="password")
     if st.button("Entrar"):
         if senha == SENHA_MESTRE:
@@ -22,12 +22,20 @@ if not st.session_state['autenticado']:
             st.error("Senha incorreta!")
     st.stop()
 
-# ---------------- ESTILO DARK PREMIUM ----------------
+# ---------------- ESTILO DARK (VISIBILIDADE TOTAL EM BRANCO) ----------------
 st.set_page_config(page_title="Consultoria Agronômica", layout="wide", page_icon="🌿")
 
 st.markdown("""
     <style>
+    /* Fundo principal preto */
     .main { background-color: #0e1117; }
+    
+    /* Forçar todos os textos, labels e unidades para Branco */
+    label, p, span, h1, h2, h3, .stMarkdown, .stSlider, .stSelectbox, .stNumberInput {
+        color: #ffffff !important;
+    }
+    
+    /* Estilização dos Cartões de Métrica */
     div[data-testid="stMetric"] {
         background-color: #1a1c23 !important;
         border: 1px solid #2e3139;
@@ -35,105 +43,105 @@ st.markdown("""
         border-radius: 10px;
         border-left: 5px solid #28a745 !important;
     }
+    div[data-testid="stMetricLabel"] > div { color: #ffffff !important; font-weight: bold; }
+    div[data-testid="stMetricValue"] > div { color: #ffffff !important; }
+
+    /* Botão Verde */
     .stButton>button {
         background-color: #28a745 !important;
         color: white !important;
         font-weight: bold;
         width: 100%;
-        height: 3em;
+        height: 3.5em;
+        border-radius: 8px;
     }
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    
+    /* Inputs visíveis */
+    input {
+        background-color: #262730 !important;
+        color: white !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 # ---------------- SIDEBAR (CONFIGURAÇÕES) ----------------
 with st.sidebar:
-    st.markdown("<h1 style='text-align: center;'>🌿</h1>", unsafe_allow_html=True)
-    st.title("Configurações")
+    st.title("⚙️ Configurações")
     nome_cliente = st.text_input("👨‍🌾 Nome do Cliente:", "")
     fazenda = st.text_input("🏠 Fazenda:", "")
-    talhao = st.text_input("📍 Talhão:", "")
     municipio = st.text_input("🏙️ Município:", "Redenção do Gurguéia")
-    estado = st.selectbox("🌎 Estado:", ["PI", "MA", "BA", "TO", "CE", "PE", "RN", "PB", "AL", "SE", "MG", "GO", "MT", "MS", "SP", "RJ", "ES", "PR", "SC", "RS", "AM", "RR", "AP", "PA", "AC", "RO", "DF"], index=0)
+    estado = st.selectbox("🌎 Estado:", ["PI", "MA", "BA", "TO", "CE", "PE", "RN", "PB", "AL", "SE", "MG", "GO", "MT", "MS", "SP", "RJ", "ES", "PR", "SC", "RS", "AM", "RR", "AP", "PA", "AC", "RO", "DF"])
     
     st.divider()
-    area_ha = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.01, format="%.2f")
+    area_ha = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.01)
     cultura = st.radio("🌱 Cultura:", ["Soja", "Milho", "Palma Forrageira"], horizontal=True)
     
-    variedade_palma = ""
+    var_palma = ""
     if cultura == "Palma Forrageira":
-        variedade_palma = st.selectbox("🌵 Variedade da Palma:", ["Orelha de Elefante (Gigante)", "Miúda (Doce)"])
+        var_palma = st.selectbox("🌵 Variedade da Palma:", ["Orelha de Elefante (Gigante)", "Miúda (Doce)"])
         meta_ton = st.select_slider("🎯 Meta de Matéria Seca (t MS/ha):", options=[float(i) for i in range(5, 41)], value=20.0)
     else:
         meta_ton = st.select_slider("🎯 Meta de Produtividade (t/ha):", options=[float(i/2) for i in range(2, 31)], value=4.0 if cultura == "Soja" else 8.0)
 
-nome_arquivo = nome_cliente.replace(" ", "_") if nome_cliente else "Cliente"
-
-# ---------------- CABEÇALHO ----------------
+# ---------------- 1️⃣ ENTRADA DE DADOS DA ANÁLISE ----------------
 st.title("SISTEMA DE PRESCRIÇÃO AGRONÔMICA")
-st.write(f"**Consultor:** Felipe Amorim | **Data:** {data_hoje}")
-
-# ---------------- 1️⃣ ANÁLISE DE SOLO ----------------
-st.subheader("1️⃣ Análise de Solo (Química e Física)")
+st.subheader("1️⃣ Dados da Análise de Solo")
 col1, col2, col3 = st.columns(3)
 with col1:
-    p_solo = st.number_input("Fósforo (mg/dm³)", 0.0, value=8.0)
-    k_solo = st.number_input("Potássio (cmolc/dm³)", 0.0, value=0.15)
-    ph_solo = st.number_input("pH do Solo", 0.0, 14.0, value=5.5)
+    p_s = st.number_input("Fósforo (P) - mg/dm³", 0.0, value=8.0)
+    k_s = st.number_input("Potássio (K) - cmolc/dm³", 0.0, value=0.15)
+    ph_s = st.number_input("pH em Água", 0.0, 14.0, value=5.5)
 with col2:
-    argila = st.number_input("Argila (%)", 0.0, 100.0, value=35.0)
-    v_atual = st.number_input("V% Atual", 0.0, 100.0, value=40.0)
-    al_solo = st.number_input("Alumínio (cmolc/dm³)", 0.0, value=0.0)
+    arg = st.number_input("Argila (%)", 0.0, 100.0, value=35.0)
+    v_at = st.number_input("V% Atual", 0.0, 100.0, value=40.0)
+    al_s = st.number_input("Alumínio (Al) - cmolc/dm³", 0.0, value=0.0)
 with col3:
-    ctc = st.number_input("CTC (cmolc/dm³)", 0.0, value=3.25)
-    prnt = st.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
+    ctc_s = st.number_input("CTC Total (T) - cmolc/dm³", 0.0, value=3.25)
+    prnt_s = st.number_input("PRNT do Calcário (%)", 0.0, 100.0, value=85.0)
 
-# ---------------- LÓGICA TÉCNICA ----------------
-def interpretar_solo(p, k, arg):
-    if arg > 35: lim_p = [3, 6, 9, 12]
-    else: lim_p = [6, 12, 18, 30]
-    niv_p = "Baixo" if p <= lim_p[1] else "Médio" if p <= lim_p[2] else "Bom"
-    niv_k = "Baixo" if k <= 0.15 else "Médio" if k <= 0.30 else "Bom"
-    return niv_p, niv_k
+# ---------------- LÓGICA DE INTERPRETAÇÃO (BAIXO, MÉDIO, BOM) ----------------
+if arg > 35: 
+    status_p = "Baixo" if p_s <= 6 else "Médio" if p_s <= 9 else "Bom"
+else: 
+    status_p = "Baixo" if p_s <= 12 else "Médio" if p_s <= 18 else "Bom"
 
-nivel_p, nivel_k = interpretar_solo(p_solo, k_solo, argila)
+status_k = "Baixo" if k_s <= 0.15 else "Médio" if k_s <= 0.30 else "Bom"
 
+# ---------------- CÁLCULOS TÉCNICOS ----------------
 v_alvo = 70 if cultura in ["Soja", "Palma Forrageira"] else 60
-nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
-total_calc = nc * area_ha
+nc_ha = max(0.0, ((v_alvo - v_at) * ctc_s) / prnt_s)
 
 if cultura == "Soja":
-    rec_n, rec_p, rec_k = 0, (meta_ton * 15) * (1.5 if nivel_p == "Baixo" else 1.0), (meta_ton * 20) * (1.4 if nivel_k == "Baixo" else 1.0)
+    r_n, r_p, r_k = 0, (meta_ton * 15) * (1.5 if status_p == "Baixo" else 1.0), (meta_ton * 20) * (1.4 if status_k == "Baixo" else 1.0)
 elif cultura == "Milho":
-    rec_n, rec_p, rec_k = (meta_ton * 22), (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0), (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
+    r_n, r_p, r_k = (meta_ton * 22), (meta_ton * 12) * (1.3 if status_p == "Baixo" else 1.0), (meta_ton * 18) * (1.2 if status_k == "Baixo" else 1.0)
 else: # Palma Forrageira
-    rec_n = meta_ton * 10 
-    rec_p = 90 * (1.5 if nivel_p == "Baixo" else 1.0) 
-    rec_k = 120 * (1.5 if nivel_k == "Baixo" else 1.0) 
+    r_n = meta_ton * 10
+    r_p = 90 * (1.5 if status_p == "Baixo" else 1.0)
+    r_k = 120 * (1.5 if status_k == "Baixo" else 1.0)
 
-# ---------------- 2️⃣ DASHBOARD E ADUBAÇÃO ----------------
+# ---------------- 2️⃣ EXIBIÇÃO RESULTADOS (DASHBOARD) ----------------
 st.divider()
-st.subheader("2️⃣ Diagnóstico e Planejamento")
-r1, r2, r3 = st.columns([1, 1, 2])
+st.subheader("2️⃣ Diagnóstico e Prescrição")
+r1, r2, r3 = st.columns(3)
 with r1:
-    st.metric("Calagem (t/ha)", f"{nc:.2f}")
-    st.write(f"Total: **{total_calc:.2f} t**")
+    st.metric("Calagem", f"{nc_ha:.2f} t/ha")
+    st.write(f"Total: {(nc_ha * area_ha):.2f} t")
 with r2:
-    gesso_dose = (argila * 50) / 1000 if (al_solo > 0.5) else 0.0
-    st.metric("Gessagem (t/ha)", f"{gesso_dose:.2f}")
+    st.metric("Status Fósforo (P)", status_p)
 with r3:
-    st.write("**Formulação Comercial**")
-    f_n = st.number_input("N%", 0, value=10 if cultura=="Palma Forrageira" else 4)
-    f_p = st.number_input("P%", 0, value=10 if cultura=="Palma Forrageira" else 20)
-    f_k = st.number_input("K%", 0, value=20)
-    
-    dose_p = (rec_p / f_p * 100) if f_p > 0 else 0
-    dose_k = (rec_k / f_k * 100) if f_k > 0 else 0
-    dose_final = max(dose_p, dose_k)
-    st.success(f"Dose: {dose_final:.0f} kg/ha | Total: {math.ceil(dose_final * area_ha / 50)} sacos")
+    st.metric("Status Potássio (K)", status_k)
 
-# ---------------- FUNÇÃO PDF (CARACTERES CORRIGIDOS) ----------------
+st.write("### Simulação de Adubação Comercial")
+f1, f2, f3 = st.columns(3)
+f_n = f1.number_input("N% (Nitrogênio)", 0, value=10 if cultura == "Palma Forrageira" else 4)
+f_p = f2.number_input("P% (Fósforo)", 0, value=10 if cultura == "Palma Forrageira" else 20)
+f_k = f3.number_input("K% (Potássio)", 0, value=20)
+
+dose_final = max((r_p / f_p * 100) if f_p > 0 else 0, (r_k / f_k * 100) if f_k > 0 else 0)
+st.success(f"Dose Recomendada: {dose_final:.0f} kg/ha | Total área: {math.ceil(dose_final * area_ha / 50)} sacos de 50kg")
+
+# ---------------- FUNÇÃO PDF PROFISSIONAL ----------------
 def clean_txt(t):
     return str(t).encode('latin-1', 'replace').decode('latin-1').replace('?', '-')
 
@@ -141,48 +149,54 @@ def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     
-    # Cabeçalho
+    # Cabeçalho Superior
     pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 40, 'F')
     pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", "B", 16)
     pdf.cell(190, 15, clean_txt("RELATÓRIO DE PRESCRIÇÃO AGRONÔMICA"), align="C", ln=True)
     pdf.set_font("Arial", "", 10); pdf.cell(190, 5, clean_txt(f"Consultor: Felipe Amorim | Data: {data_hoje}"), align="C", ln=True)
     
-    # Infos Gerais
-    pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, clean_txt(" 1. DIAGNÓSTICO E CULTURA"), ln=True, fill=True)
+    # Seção 1: Identificação
+    pdf.set_text_color(0, 0, 0); pdf.ln(20); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
+    pdf.cell(190, 8, clean_txt(" 1. DADOS DO CLIENTE E CULTURA"), ln=True, fill=True)
     pdf.set_font("Arial", "", 10)
     pdf.cell(190, 7, clean_txt(f" Cliente: {nome_cliente} | Fazenda: {fazenda}"), ln=True)
-    cult_str = f"{cultura} ({variedade_palma})" if cultura == "Palma Forrageira" else cultura
-    pdf.cell(190, 7, clean_txt(f" Cultura: {cult_str} | Área: {area_ha} ha | Meta: {meta_ton} t/ha"), ln=True)
+    pdf.cell(190, 7, clean_txt(f" Municipio: {municipio} - {estado}"), ln=True)
+    pdf.cell(190, 7, clean_txt(f" Cultura: {cultura} {var_palma} | Area: {area_ha} ha | Meta: {meta_ton} t/ha"), ln=True)
     
-    # Prescrição
+    # Seção 2: Análise de Solo Completa
     pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, clean_txt(" 2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
+    pdf.cell(190, 8, clean_txt(" 2. ANALISE DE SOLO E INTERPRETACAO"), ln=True, fill=True)
     pdf.set_font("Arial", "", 10)
-    pdf.cell(190, 7, clean_txt(f" Calagem: {nc:.2f} t/ha | Gessagem: {gesso_dose:.2f} t/ha"), ln=True)
-    pdf.cell(190, 7, clean_txt(f" Adubação: {dose_final:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
+    pdf.cell(95, 7, clean_txt(f" Fosforo (P): {p_s} mg/dm3 -> Status: {status_p}"), ln=0)
+    pdf.cell(95, 7, clean_txt(f" Potassio (K): {k_s} cmolc/dm3 -> Status: {status_k}"), ln=1)
+    pdf.cell(63, 7, clean_txt(f" Argila: {arg}%"), ln=0)
+    pdf.cell(63, 7, clean_txt(f" pH: {ph_s}"), ln=0)
+    pdf.cell(64, 7, clean_txt(f" V%: {v_at}%"), ln=1)
 
-    # Manejo
+    # Seção 3: Recomendações
+    pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
+    pdf.cell(190, 8, clean_txt(" 3. RECOMENDACOES TECNICAS"), ln=True, fill=True)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(190, 7, clean_txt(f" Calagem: {nc_ha:.2f} t/ha | Gessagem: {(arg * 50 / 1000):.2f} t/ha"), ln=True)
+    pdf.cell(190, 7, clean_txt(f" Adubacao: {dose_final:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
+
+    # Seção 4: Manejo Específico
     pdf.ln(5); pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, clean_txt(" 3. OBSERVAÇÕES DE MANEJO"), ln=True, fill=True)
+    pdf.cell(190, 8, clean_txt(" 4. ORIENTACOES DE MANEJO"), ln=True, fill=True)
     pdf.set_font("Arial", "I", 9)
-    
     if cultura == "Palma Forrageira":
-        obs_var = "Variedade Miúda: Exige solo de alta fertilidade e drenagem." if "Miúda" in variedade_palma else "Variedade Orelha de Elefante: Alta robustez e teto produtivo."
         notas = [
-            f"- {obs_var}",
-            "- REGRA DE OURO: JAMAIS cortar o cladódio inicial (RAQUETE MÃE).",
-            "- A preservação da raquete mãe garante a longevidade do palmal.",
-            "- Realizar o primeiro corte entre 18 e 24 meses após o plantio.",
-            "- Recomendado aplicar 20-30 t/ha de esterco bovino curtido no plantio."
+            f"- Variedade: {var_palma}",
+            "- REGRA CRITICA: JAMAIS realizar o corte da RAQUETE MAE.",
+            "- A preservacao da base garante a longevidade e vigor do palmal.",
+            "- Primeiro corte sugerido entre 18 a 24 meses após o plantio.",
+            "- Recomendado aplicacao de adubo organico (esterco bovino curtido)."
         ]
     elif cultura == "Milho":
-        notas = ["- Nitrogênio: Fracionar 1/3 no plantio e 2/3 em cobertura (V4-V6)."]
+        notas = ["- Fracionar Nitrogenio: 30% no plantio e 70% em cobertura (V4-V6)."]
     else:
-        notas = ["- Soja: Focar em inoculação de qualidade e controle de pragas."]
-
-    for linha in notas:
-        pdf.cell(190, 6, clean_txt(linha), ln=True)
+        notas = ["- Realizar inoculacao de sementes e monitorar pragas iniciais."]
+    for n in notas: pdf.cell(190, 6, clean_txt(n), ln=True)
 
     return pdf.output(dest='S').encode('latin-1')
 
@@ -190,8 +204,8 @@ def gerar_pdf():
 st.divider()
 st.info(f"💡 O sistema está configurado para a cultura: **{cultura}**.")
 
-if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
+if st.button("📄 GERAR RELATÓRIO PDF PROFISSIONAL"):
     pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Prescricao_{nome_arquivo}.pdf")
+    st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Recomendacao_{cultura}.pdf")
 
 st.caption("Felipe Amorim | Consultoria Agronômica")
