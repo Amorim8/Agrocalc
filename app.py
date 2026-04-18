@@ -22,7 +22,7 @@ if not st.session_state['autenticado']:
             st.error("Senha incorreta!")
     st.stop()
 
-# ---------------- ESTILO VISUAL (CARDS EM DOBRO) ----------------
+# ---------------- ESTILO VISUAL ----------------
 st.set_page_config(page_title="Felipe Amorim | Consultoria", layout="wide", page_icon="🌿")
 
 st.markdown("""
@@ -84,40 +84,55 @@ with col3:
     ctc_s = st.number_input("CTC Total (T)", 0.0, value=3.25)
     prnt_s = st.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
 
-# ---------------- LÓGICA DE CÁLCULO ----------------
+# ---------------- LÓGICA DE CLASSIFICAÇÃO NPK ----------------
+# Lógica para Fósforo (P) baseada em Argila
+if arg > 60:
+    st_p = "Baixo" if p_s <= 4.0 else "Médio" if p_s <= 6.0 else "Alto"
+elif arg > 35:
+    st_p = "Baixo" if p_s <= 6.0 else "Médio" if p_s <= 9.0 else "Alto"
+elif arg > 15:
+    st_p = "Baixo" if p_s <= 12.0 else "Médio" if p_s <= 18.0 else "Alto"
+else:
+    st_p = "Baixo" if p_s <= 20.0 else "Médio" if p_s <= 30.0 else "Alto"
+
+# Lógica para Potássio (K)
+st_k = "Baixo" if k_s <= 0.15 else "Médio" if k_s <= 0.30 else "Alto"
+
+# Lógica para Nitrogênio (N) - Geralmente baseada em Matéria Orgânica ou histórico, 
+# aqui simulamos pela meta de produtividade/cultura
+st_n = "Baixo" if meta_ton < (10 if cultura=="Palma Forrageira" else 4) else "Médio" if meta_ton < (25 if cultura=="Palma Forrageira" else 8) else "Alto"
+
+# ---------------- CÁLCULOS TÉCNICOS ----------------
 v_alvo = 70 if cultura in ["Soja", "Palma Forrageira"] else 60
 nc_ha = max(0.0, ((v_alvo - v_at) * ctc_s) / prnt_s)
 ng_ha = (arg * 50) / 1000 if (al_s > 0.5) else 0.0
 
-if arg > 35: st_p = "Baixo" if p_s <= 6 else "Médio" if p_s <= 9 else "Bom"
-else: st_p = "Baixo" if p_s <= 12 else "Médio" if p_s <= 18 else "Bom"
-st_k = "Baixo" if k_s <= 0.15 else "Médio" if k_s <= 0.30 else "Bom"
-
 if cultura == "Soja":
-    r_p, r_k = (meta_ton * 15), (meta_ton * 20)
+    r_n, r_p, r_k = 0, (meta_ton * 15), (meta_ton * 20)
 elif cultura == "Milho":
-    r_p, r_k = (meta_ton * 12), (meta_ton * 18)
+    r_n, r_p, r_k = (meta_ton * 22), (meta_ton * 12), (meta_ton * 18)
 else: # Palma
-    r_p = 90 * (1.5 if st_p == "Baixo" else 1.0)
-    r_k = 150 * (1.5 if st_k == "Baixo" else 1.0)
+    r_n, r_p, r_k = (meta_ton * 12), 90 * (1.5 if st_p == "Baixo" else 1.0), 150 * (1.5 if st_k == "Baixo" else 1.0)
 
-# ---------------- 2️⃣ RESULTADOS: CALAGEM E GESSAGEM (DUPLO VALOR) ----------------
+# ---------------- 2️⃣ DASHBOARD: STATUS E CORRETIVOS ----------------
 st.divider()
-st.subheader(f"2️⃣ Corretivos: Por Hectare vs. Área Total ({area_total} ha)")
+st.subheader(f"2️⃣ Diagnóstico NPK e Corretivos ({area_total} ha)")
 
-# Calcário
-st.markdown("### ⚪ Recomendações de Calcário")
-c_col1, c_col2 = st.columns(2)
-c_col1.metric("POR HECTARE (t/ha)", f"{nc_ha:.2f}")
-c_col2.metric(f"TOTAL ÁREA ({area_total} ha)", f"{nc_ha * area_total:.2f} t")
+# Status Nutricional
+s1, s2, s3 = st.columns(3)
+s1.metric("Status Nitrogênio (N)", st_n)
+s2.metric("Status Fósforo (P)", st_p)
+s3.metric("Status Potássio (K)", st_k)
 
-# Gesso
-st.markdown("### 🟡 Recomendações de Gesso")
-g_col1, g_col2 = st.columns(2)
-g_col1.metric("POR HECTARE (t/ha)", f"{ng_ha:.2f}")
-g_col2.metric(f"TOTAL ÁREA ({area_total} ha)", f"{ng_ha * area_total:.2f} t")
+# Calcário e Gesso
+st.markdown("---")
+c_col1, c_col2, g_col1, g_col2 = st.columns(4)
+c_col1.metric("CALCÁRIO (t/ha)", f"{nc_ha:.2f}")
+c_col2.metric("TOTAL CALCÁRIO (t)", f"{nc_ha * area_total:.2f}")
+g_col1.metric("GESSO (t/ha)", f"{ng_ha:.2f}")
+g_col2.metric("TOTAL GESSO (t)", f"{ng_ha * area_total:.2f}")
 
-# ---------------- 3️⃣ ADUBAÇÃO COMERCIAL (DUPLO VALOR) ----------------
+# ---------------- 3️⃣ ADUBAÇÃO COMERCIAL ----------------
 st.write("---")
 st.subheader("3️⃣ Planejamento de Adubação Comercial")
 f1, f2, f3 = st.columns(3)
@@ -130,7 +145,6 @@ if f_p > 0 or f_k > 0:
     total_adubo_kg = dose_ha * area_total
     total_sacos = math.ceil(total_adubo_kg / 50)
     
-    st.write("")
     a1, a2, a3 = st.columns(3)
     a1.metric("DOSE (kg/ha)", f"{dose_ha:.0f}")
     a2.metric(f"TOTAL ({area_total} ha)", f"{total_adubo_kg:.0f} kg")
@@ -148,34 +162,32 @@ def gerar_pdf():
     pdf.set_font("Arial", "", 10); pdf.cell(190, 5, fix(f"Consultor: Felipe Amorim | Data: {data_hoje}"), align="C", ln=True)
     
     pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, fix(f" 1. RESUMO DA ÁREA: {area_total} ha"), ln=True, fill=True)
+    pdf.cell(190, 8, fix(f" 1. STATUS DA FERTILIDADE - AREA: {area_total} ha"), ln=True, fill=True)
     pdf.set_font("Arial", "", 10)
+    pdf.cell(190, 7, fix(f" Nitrogenio: {st_n} | Fosforo: {st_p} | Potassio: {st_k}"), ln=True)
     pdf.cell(190, 7, fix(f" Cliente: {nome_cliente} | Fazenda: {fazenda} | Cultura: {cultura}"), ln=True)
     
     pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, fix(" 2. DETALHAMENTO DA PRESCRIÇÃO"), ln=True, fill=True)
+    pdf.cell(190, 8, fix(" 2. RECOMENDACOES TOTAIS"), ln=True, fill=True)
     pdf.set_font("Arial", "B", 10)
-    
-    # Linhas de Calagem e Gessagem no PDF
-    pdf.cell(190, 7, fix(f" - CALCÁRIO: {nc_ha:.2f} t/ha | TOTAL ÁREA: {nc_ha * area_total:.2f} t"), ln=True)
-    pdf.cell(190, 7, fix(f" - GESSO: {ng_ha:.2f} t/ha | TOTAL ÁREA: {ng_ha * area_total:.2f} t"), ln=True)
-    pdf.cell(190, 7, fix(f" - ADUBO ({f_n}-{f_p}-{f_k}): {dose_ha:.0f} kg/ha | TOTAL ÁREA: {total_adubo_kg:.0f} kg"), ln=True)
-    pdf.cell(190, 7, fix(f" - COMPRA TOTAL ADUBO: {total_sacos} sacos de 50kg."), ln=True)
+    pdf.cell(190, 7, fix(f" - CALCARIO: {nc_ha * area_total:.2f} t"), ln=True)
+    pdf.cell(190, 7, fix(f" - GESSO: {ng_ha * area_total:.2f} t"), ln=True)
+    pdf.cell(190, 7, fix(f" - ADUBO ({f_n}-{f_p}-{f_k}): {total_adubo_kg:.0f} kg ({total_sacos} sacos)"), ln=True)
 
     pdf.ln(5); pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, fix(" 3. MANEJO TÉCNICO"), ln=True, fill=True)
+    pdf.cell(190, 8, fix(" 3. MANEJO E OBSERVACOES"), ln=True, fill=True)
     pdf.set_font("Arial", "", 9)
     if cultura == "Palma Forrageira":
-        obs = ["- PROIBIDO o corte na raquete mae.", f"- Variedade: {var_palma}.", "- Manejo de Nitrogenio apos chuvas."]
+        obs = ["- PROIBIDO cortar a raquete mae.", f"- Variedade: {var_palma}.", "- Manejo de Nitrogenio apos as chuvas."]
     else:
-        obs = ["- Monitorar umidade para cobertura.", "- Controle preventivo de pragas."]
+        obs = ["- Monitorar umidade para cobertura.", "- Controle preventivo de pragas e doencas."]
     for item in obs: pdf.multi_cell(190, 5, fix(item))
 
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
-if st.button("📄 GERAR RELATÓRIO PDF COMPLETO"):
+if st.button("📄 GERAR RELATÓRIO PDF"):
     pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Relatorio_{nome_cliente}.pdf")
+    st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Recomendacao_{nome_cliente}.pdf")
 
 st.caption("Felipe Amorim | Consultoria Agronômica")
