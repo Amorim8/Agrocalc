@@ -84,23 +84,22 @@ with col3:
     ctc_s = st.number_input("CTC Total (T)", 0.0, value=3.25)
     prnt_s = st.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
 
-# ---------------- LÓGICA DE CLASSIFICAÇÃO NPK ----------------
-# Lógica para Fósforo (P) baseada em Argila
-if arg > 60:
-    st_p = "Baixo" if p_s <= 4.0 else "Médio" if p_s <= 6.0 else "Alto"
-elif arg > 35:
-    st_p = "Baixo" if p_s <= 6.0 else "Médio" if p_s <= 9.0 else "Alto"
-elif arg > 15:
-    st_p = "Baixo" if p_s <= 12.0 else "Médio" if p_s <= 18.0 else "Alto"
-else:
+# ---------------- LÓGICA DE ARGILA (CLASSE TEXTURAL) ----------------
+if arg <= 15:
+    classe_argila = "Arenosa"
     st_p = "Baixo" if p_s <= 20.0 else "Médio" if p_s <= 30.0 else "Alto"
+elif arg <= 35:
+    classe_argila = "Média"
+    st_p = "Baixo" if p_s <= 12.0 else "Médio" if p_s <= 18.0 else "Alto"
+elif arg <= 60:
+    classe_argila = "Argilosa"
+    st_p = "Baixo" if p_s <= 6.0 else "Médio" if p_s <= 9.0 else "Alto"
+else:
+    classe_argila = "Muito Argilosa"
+    st_p = "Baixo" if p_s <= 4.0 else "Médio" if p_s <= 6.0 else "Alto"
 
-# Lógica para Potássio (K)
 st_k = "Baixo" if k_s <= 0.15 else "Médio" if k_s <= 0.30 else "Alto"
-
-# Lógica para Nitrogênio (N) - Geralmente baseada em Matéria Orgânica ou histórico, 
-# aqui simulamos pela meta de produtividade/cultura
-st_n = "Baixo" if meta_ton < (10 if cultura=="Palma Forrageira" else 4) else "Médio" if meta_ton < (25 if cultura=="Palma Forrageira" else 8) else "Alto"
+st_n = "Baixo" if meta_ton < 4 else "Médio" if meta_ton < 8 else "Alto"
 
 # ---------------- CÁLCULOS TÉCNICOS ----------------
 v_alvo = 70 if cultura in ["Soja", "Palma Forrageira"] else 60
@@ -114,17 +113,15 @@ elif cultura == "Milho":
 else: # Palma
     r_n, r_p, r_k = (meta_ton * 12), 90 * (1.5 if st_p == "Baixo" else 1.0), 150 * (1.5 if st_k == "Baixo" else 1.0)
 
-# ---------------- 2️⃣ DASHBOARD: STATUS E CORRETIVOS ----------------
+# ---------------- 2️⃣ DASHBOARD ----------------
 st.divider()
-st.subheader(f"2️⃣ Diagnóstico NPK e Corretivos ({area_total} ha)")
+st.subheader(f"2️⃣ Diagnóstico e Corretivos ({area_total} ha)")
+s1, s2, s3, s4 = st.columns(4)
+s1.metric("Textura Solo", classe_argila)
+s2.metric("Status (N)", st_n)
+s3.metric("Status (P)", st_p)
+s4.metric("Status (K)", st_k)
 
-# Status Nutricional
-s1, s2, s3 = st.columns(3)
-s1.metric("Status Nitrogênio (N)", st_n)
-s2.metric("Status Fósforo (P)", st_p)
-s3.metric("Status Potássio (K)", st_k)
-
-# Calcário e Gesso
 st.markdown("---")
 c_col1, c_col2, g_col1, g_col2 = st.columns(4)
 c_col1.metric("CALCÁRIO (t/ha)", f"{nc_ha:.2f}")
@@ -150,44 +147,75 @@ if f_p > 0 or f_k > 0:
     a2.metric(f"TOTAL ({area_total} ha)", f"{total_adubo_kg:.0f} kg")
     a3.metric("COMPRA (SACOS)", f"{total_sacos}")
 
-# ---------------- 4️⃣ PDF RELATÓRIO ----------------
+# ---------------- 4️⃣ PDF PERSONALIZADO ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     def fix(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
     
-    pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 40, 'F')
-    pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 15, fix("RECOMENDAÇÃO TÉCNICA AGRONÔMICA"), align="C", ln=True)
-    pdf.set_font("Arial", "", 10); pdf.cell(190, 5, fix(f"Consultor: Felipe Amorim | Data: {data_hoje}"), align="C", ln=True)
-    
-    pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, fix(f" 1. STATUS DA FERTILIDADE - AREA: {area_total} ha"), ln=True, fill=True)
+    # Cabeçalho Profissional
+    pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
+    pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", "B", 18)
+    pdf.cell(190, 15, fix("PRESCRIÇÃO TÉCNICA AGRONÔMICA"), align="C", ln=True)
     pdf.set_font("Arial", "", 10)
-    pdf.cell(190, 7, fix(f" Nitrogenio: {st_n} | Fosforo: {st_p} | Potassio: {st_k}"), ln=True)
-    pdf.cell(190, 7, fix(f" Cliente: {nome_cliente} | Fazenda: {fazenda} | Cultura: {cultura}"), ln=True)
+    pdf.cell(190, 6, fix(f"Consultoria: Felipe Amorim | Data: {data_hoje}"), align="C", ln=True)
+    pdf.cell(190, 6, fix("Base Técnica: Embrapa e Manuais de Fertilidade de Solo"), align="C", ln=True)
     
-    pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, fix(" 2. RECOMENDACOES TOTAIS"), ln=True, fill=True)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(190, 7, fix(f" - CALCARIO: {nc_ha * area_total:.2f} t"), ln=True)
-    pdf.cell(190, 7, fix(f" - GESSO: {ng_ha * area_total:.2f} t"), ln=True)
-    pdf.cell(190, 7, fix(f" - ADUBO ({f_n}-{f_p}-{f_k}): {total_adubo_kg:.0f} kg ({total_sacos} sacos)"), ln=True)
+    pdf.set_text_color(0, 0, 0); pdf.ln(15)
+    
+    # Seção 1: Dados do Cliente e Textura
+    pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
+    pdf.cell(190, 9, fix(f" 1. IDENTIFICAÇÃO E DIAGNÓSTICO (TEXTURA: {classe_argila.upper()})"), ln=True, fill=True)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(190, 7, fix(f" Cliente: {nome_cliente} | Fazenda: {fazenda}"), ln=True)
+    pdf.cell(190, 7, fix(f" Cultura: {cultura} | Área Total da Gleba: {area_total} ha"), ln=True)
+    pdf.cell(190, 7, fix(f" Teor de Argila: {arg}% | Status NPK: N({st_n}), P({st_p}), K({st_k})"), ln=True)
 
+    # Seção 2: Recomendações
+    pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Arial", "B", 11)
+    pdf.cell(190, 9, fix(" 2. RECOMENDAÇÕES DE CORRETIVOS E FERTILIZANTES"), ln=True, fill=True)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(190, 8, fix(f" > CALCÁRIO: {nc_ha:.2f} t/ha | TOTAL PARA A ÁREA: {nc_ha * area_total:.2f} t"), ln=True)
+    pdf.cell(190, 8, fix(f" > GESSO: {ng_ha:.2f} t/ha | TOTAL PARA A ÁREA: {ng_ha * area_total:.2f} t"), ln=True)
+    pdf.cell(190, 8, fix(f" > ADUBO COMERCIAL ({f_n}-{f_p}-{f_k}): {dose_ha:.0f} kg/ha"), ln=True)
+    pdf.set_text_color(200, 0, 0)
+    pdf.cell(190, 8, fix(f" > NECESSIDADE DE COMPRA: {total_sacos} sacos de 50kg."), ln=True)
+    pdf.set_text_color(0, 0, 0)
+
+    # Seção 3: Observações Exclusivas
     pdf.ln(5); pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", "B", 11)
-    pdf.cell(190, 8, fix(" 3. MANEJO E OBSERVACOES"), ln=True, fill=True)
+    pdf.cell(190, 9, fix(" 3. OBSERVAÇÕES TÉCNICAS E FONTES"), ln=True, fill=True)
+    pdf.set_font("Arial", "I", 9)
+    
+    pdf.multi_cell(190, 5, fix("AVISO: Esta recomendação é EXCLUSIVA para os dados de análise de solo inseridos neste sistema. Alterações na área ou na meta de produtividade invalidam estes cálculos."))
+    
     pdf.set_font("Arial", "", 9)
-    if cultura == "Palma Forrageira":
-        obs = ["- PROIBIDO cortar a raquete mae.", f"- Variedade: {var_palma}.", "- Manejo de Nitrogenio apos as chuvas."]
+    if cultura == "Milho":
+        obs = [
+            "- Realizar a adubação de cobertura entre V4 e V6.",
+            "- Monitorar a presença de cigarrinha e percevejo precocemente.",
+            "- Recomendação ajustada para alta eficiência fotossintética do Milho (C4)."
+        ]
+    elif cultura == "Palma Forrageira":
+        obs = [
+            "- Proibido realizar o corte na raquete mãe.",
+            "- Adubação de N e K deve ser fracionada após o início das chuvas.",
+            f"- Variedade selecionada: {var_palma}."
+        ]
     else:
-        obs = ["- Monitorar umidade para cobertura.", "- Controle preventivo de pragas e doencas."]
-    for item in obs: pdf.multi_cell(190, 5, fix(item))
+        obs = ["- Inocular sementes com Bradyrhizobium.", "- Monitorar percevejos no início da floração."]
+    
+    for item in obs: pdf.cell(190, 5, fix(item), ln=True)
+
+    pdf.ln(5)
+    pdf.set_font("Arial", "I", 8)
+    pdf.cell(190, 5, fix("Fonte: Manual de Calagem e Adubação (Embrapa) / Tabela de Recomendação regional."), align="C", ln=True)
 
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
-if st.button("📄 GERAR RELATÓRIO PDF"):
+if st.button("📄 GERAR RELATÓRIO PDF PERSONALIZADO"):
     pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Recomendacao_{nome_cliente}.pdf")
+    st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Relatório_{nome_cliente}.pdf")
 
 st.caption("Felipe Amorim | Consultoria Agronômica")
