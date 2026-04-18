@@ -48,7 +48,7 @@ footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- SIDEBAR (ENTRADAS) ----------------
+# ---------------- SIDEBAR ----------------
 with st.sidebar:
     st.title("🌿 Configurações")
     nome_cliente_input = st.text_input("👨‍🌾 Nome do Cliente:")
@@ -57,7 +57,6 @@ with st.sidebar:
     estado = st.selectbox("🌎 Estado:", ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"])
     
     st.divider()
-    # Área formatada para evitar confusão entre 1ha e 1000ha
     area = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.1, format="%.2f")
     cultura = st.radio("🌱 Cultura:", ["Soja", "Milho", "Palma"], horizontal=True)
 
@@ -85,40 +84,37 @@ with c3:
     ctc_t = st.number_input("CTC (T)", value=3.25)
     prnt_calc = st.number_input("PRNT do Calcário (%)", value=85.0)
 
-# ---------------- LÓGICA DE CÁLCULO (REFERÊNCIAS TÉCNICAS) ----------------
-# 1. Calagem (SBCS): V alvo 70% para Soja/Palma e 60% para Milho
+# ---------------- LÓGICA TÉCNICA ----------------
 v_alvo = 70 if cultura in ["Soja", "Palma"] else 60
 nc = max(0, ((v_alvo - v_atual) * ctc_t) / prnt_calc)
 total_calc = nc * area
 
-# 2. Gessagem (Embrapa): Baseado no teor de argila
 ng = (50 * argila)/1000 if (argila > 40) else 0 
 total_gesso = ng * area
 
-# 3. Adubação NPK (Manuais de extração e exportação)
 rec_p = meta_ton * 15
 rec_k = meta_ton * 20
 
-# 4. Nitrogênio (N) - Recomendação Embrapa Milho e Sorgo (25kg N por Tonelada)
+# Nitrogênio (N) - Ref: Embrapa Milho
 rec_n = meta_ton * 25 if cultura == "Milho" else 0
 n_plantio = rec_n * 0.2
 n_cobertura = rec_n * 0.8
 n_plantio_total = n_plantio * area
 n_cobertura_total = n_cobertura * area
 
-# Formulação de Adubo
+# Configuração do Adubo
 st.subheader("Configuração da Adubação")
 f1, f2, f3 = st.columns(3)
-fn = f1.number_input("N (%) na Fórmula", value=4)
-fp = f2.number_input("P (%) na Fórmula", value=20)
-fk = f3.number_input("K (%) na Fórmula", value=20)
+fn = f1.number_input("N (%)", value=4)
+fp = f2.number_input("P (%)", value=20)
+fk = f3.number_input("K (%)", value=20)
 
 dose_ha = max((rec_p/fp*100) if fp>0 else 0, (rec_k/fk*100) if fk>0 else 0)
 total_adubo = dose_ha * area
 sacos_50kg = math.ceil(total_adubo / 50)
 
-# ---------------- RESULTADOS NA CALCULADORA ----------------
-st.subheader("Resultados")
+# ---------------- RESULTADOS ----------------
+st.subheader("Resultados da Recomendação")
 res1, res2, res3 = st.columns(3)
 
 with res1:
@@ -131,10 +127,9 @@ with res3:
     st.metric("Adubo (kg/ha)", f"{dose_ha:.0f}")
     st.metric("Total Adubo (kg)", f"{total_adubo:.1f}")
 
-# Detalhamento de Nitrogênio visível apenas para Milho
 if cultura == "Milho":
     st.divider()
-    st.subheader("📊 Manejo Nitrogenado (Milho)")
+    st.subheader("📊 Detalhamento Nitrogenado (Embrapa)")
     col_n1, col_n2 = st.columns(2)
     with col_n1:
         st.metric("N Plantio (kg/ha)", f"{n_plantio:.1f}")
@@ -143,15 +138,14 @@ if cultura == "Milho":
         st.metric("N Cobertura (kg/ha)", f"{n_cobertura:.1f}")
         st.metric("Total N Cobertura (kg)", f"{n_cobertura_total:.1f}")
 
-st.success(f"Logística: Necessários {sacos_50kg} sacos de 50kg.")
+st.success(f"Logística: {sacos_50kg} sacos de 50kg necessários.")
 
-# ---------------- GERAÇÃO DO PDF ----------------
+# ---------------- GERAR PDF ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     def fix(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
 
-    # Cabeçalho banner
     pdf.set_fill_color(34, 139, 34)
     pdf.rect(0, 0, 210, 40, 'F')
     pdf.set_text_color(255, 255, 255)
@@ -171,48 +165,31 @@ def gerar_pdf():
     pdf.set_font("Helvetica", "", 11)
     pdf.ln(2)
     pdf.cell(190, 7, fix(f"Cliente: {nome_cliente_input} | Fazenda: {fazenda}"), 0, 1)
-    area_format = f"{area:g}"
-    pdf.cell(190, 7, fix(f"Local: {municipio}-{estado} | Área: {area_format} ha | Cultura: {cultura}"), 0, 1)
+    pdf.cell(190, 7, fix(f"Local: {municipio}-{estado} | Área: {area:g} ha | Cultura: {cultura}"), 0, 1)
 
-    # Nutrição
+    # Recomendações
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(190, 8, fix("2. RECOMENDAÇÃO TÉCNICA"), 0, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 11)
     pdf.ln(2)
     pdf.cell(190, 7, fix(f"Calcário (PRNT {prnt_calc}%): {nc:.2f} t/ha | Gesso: {ng:.2f} t/ha"), 0, 1)
-    pdf.cell(190, 7, fix(f"Adubação: {dose_ha:.0f} kg/ha (Total: {total_adubo:.1f} kg)"), 0, 1)
+    pdf.cell(190, 7, fix(f"Adubação NPK: {dose_ha:.0f} kg/ha | Total: {total_adubo:.1f} kg"), 0, 1)
 
     if cultura == "Milho":
-        pdf.ln(2)
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(190, 7, fix("Manejo de Nitrogênio (N):"), 0, 1)
-        pdf.set_font("Helvetica", "", 11)
-        pdf.cell(190, 6, fix(f"- Dose no Plantio: {n_plantio:.1f} kg/ha (Total: {n_plantio_total:.1f} kg)"), 0, 1)
-        pdf.cell(190, 6, fix(f"- Dose em Cobertura: {n_cobertura:.1f} kg/ha (Total: {n_cobertura_total:.1f} kg)"), 0, 1)
+        pdf.cell(190, 7, fix(f"N Plantio: {n_plantio:.1f} kg/ha | N Cobertura: {n_cobertura:.1f} kg/ha"), 0, 1)
 
-    # Observações
+    # Observações e Fontes
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(190, 8, fix("3. OBSERVAÇÕES EXCLUSIVAS"), 0, 1, "L", fill=True)
+    pdf.cell(190, 8, fix("3. OBSERVAÇÕES E FONTES"), 0, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.ln(2)
-    if cultura == "Palma":
-        pdf.multi_cell(190, 5, fix(f"- Variedade: {variedade}\n- Adubação Orgânica: 20-30 t/ha de esterco curtido.\n- Recomendação exclusiva pelos dados que foram inseridos."))
-    elif cultura == "Milho":
-        pdf.multi_cell(190, 5, fix("- Recomendação exclusiva pelos dados que foram inseridos.\n- Realizar cobertura nitrogenada com solo úmido (estágio V4-V6).\n- Monitorar lagarta e percevejo."))
-    else:
-        pdf.multi_cell(190, 5, fix("- Recomendação exclusiva pelos dados que foram inseridos.\n- Foco total em Inoculação para suprimento biológico de N.\n- Monitorar sanidade foliar."))
-
-    # Referências (No final do PDF)
-    pdf.ln(10)
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(190, 5, fix("Referências: SBCS, Embrapa Cerrados, Embrapa Milho e Sorgo, IPA Brasil."), 0, 1)
+    pdf.multi_cell(190, 5, fix("Recomendação exclusiva pelos dados que foram inseridos.\nFontes: SBCS, Embrapa Cerrados, Embrapa Milho e Sorgo, IPA Brasil."))
 
     return pdf.output(dest='S').encode('latin-1')
 
-# ---------------- BOTÃO DOWNLOAD ----------------
 st.divider()
-if st.button("📄 Gerar Relatório Final"):
+if st.button("📄 Gerar Relatório"):
     pdf_bytes = gerar_pdf()
     st.download_button("⬇️ Baixar PDF", pdf_bytes, file_name=f"Prescricao_{nome_para_arquivo}.pdf", mime="application/pdf")
