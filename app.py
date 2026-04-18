@@ -1,7 +1,13 @@
 import streamlit as st
 from fpdf import FPDF
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
+
+# ---------------- CONFIGURAÇÕES INICIAIS ----------------
+SENHA_MESTRE = "@Lipe1928"
+
+# Ajuste de Fuso Horário (Brasília -3h em relação ao UTC)
+data_hoje = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
 
 # ---------------- SISTEMA DE ACESSO (SENHA) ----------------
 if 'autenticado' not in st.session_state:
@@ -11,7 +17,7 @@ if not st.session_state['autenticado']:
     st.markdown("<h2 style='text-align: center;'>🔐 Acesso Restrito</h2>", unsafe_allow_html=True)
     senha = st.text_input("Digite a senha para acessar o sistema:", type="password")
     if st.button("Entrar"):
-        if senha == "@Lipe1928":
+        if senha == SENHA_MESTRE:
             st.session_state['autenticado'] = True
             st.rerun()
         else:
@@ -70,7 +76,7 @@ nome_para_arquivo = nome_cliente_input.replace(" ", "_") if nome_cliente_input e
 
 # ---------------- CABEÇALHO ----------------
 st.title("SISTEMA DE PRESCRIÇÃO AGRONÔMICA")
-st.write(f"**Consultor:** Felipe Amorim | **Data:** {datetime.now().strftime('%d/%m/%Y')}")
+st.write(f"**Consultor:** Felipe Amorim | **Data:** {data_hoje}")
 
 # ---------------- 1️⃣ ANÁLISE DE SOLO ----------------
 st.subheader("1️⃣ Análise de Solo (Química e Física)")
@@ -160,14 +166,16 @@ with r3:
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
-    # Usando latin-1 para suportar acentos corretamente no FPDF
     def fix_txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
+    
+    # Data ajustada para o PDF
+    data_pdf = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
     
     # Cabeçalho
     pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255); pdf.set_font("Helvetica", "B", 16)
     pdf.cell(190, 15, fix_txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
-    pdf.set_font("Helvetica", "", 10); pdf.cell(190, 5, fix_txt(f"Consultor: Felipe Amorim | Data: {datetime.now().strftime('%d/%m/%Y')}"), align="C", ln=True)
+    pdf.set_font("Helvetica", "", 10); pdf.cell(190, 5, fix_txt(f"Consultor: Felipe Amorim | Data: {data_pdf}"), align="C", ln=True)
     
     # Dados Gerais
     pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Helvetica", "B", 11)
@@ -201,22 +209,22 @@ def gerar_pdf():
     pdf.cell(190, 7, fix_txt(f" Adubação Sugerida: {d_final_pdf:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
     pdf.cell(190, 7, fix_txt(f" Necessidade de Compra: {t_sacos_pdf} sacos (50kg) para a área total."), ln=True)
 
-    # Nota de Responsabilidade com Acentos
+    # Nota de Responsabilidade
     pdf.ln(10); pdf.set_fill_color(255, 235, 235); pdf.set_font("Helvetica", "B", 9)
     pdf.cell(190, 7, fix_txt(" NOTA DE RESPONSABILIDADE TÉCNICA"), ln=True, fill=True)
     pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(100, 0, 0)
-    pdf.multi_cell(190, 4, fix_txt("Esta recomendação baseia-se exclusivamente nos dados fornecidos pelo usuário. O sucesso da cultura depende de fatores climáticos, fitossanitários e do manejo correto no campo. O consultor não se responsabiliza por aplicações feitas sem supervisão técnica presencial adequada."))
+    pdf.multi_cell(190, 4, fix_txt("Esta recomendação baseia-se exclusivamente nos dados fornecidos pelo usuário. O sucesso da cultura depende de fatores climáticos, fitossanitários e do manejo correto no campo."))
 
     # Fontes
     pdf.ln(5); pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(34, 139, 34)
     pdf.cell(190, 8, fix_txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
     pdf.set_font("Helvetica", "I", 9); pdf.set_text_color(50, 50, 50)
-    pdf.multi_cell(190, 5, fix_txt("- Interpretação de Solo: Embrapa Cerrados / Embrapa Soja.\n- Exportação e Extração: IPNI Brasil.\n- Manejo N: Boletim 100 / Embrapa Milho e Sorgo.\n- Calagem: Método da Elevação da Saturação por Bases (V%)."))
+    pdf.multi_cell(190, 5, fix_txt("- Interpretação de Solo: Embrapa Cerrados / Embrapa Soja.\n- Exportação e Extração: IPNI Brasil.\n- Calagem: Método da Elevação da Saturação por Bases (V%)."))
     
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
-st.warning("⚠️ **Aviso:** Esta ferramenta é um auxílio à decisão. A aplicação final deve considerar as condições reais de campo e clima.")
+st.warning("⚠️ **Aviso:** Esta ferramenta é um auxílio à decisão.")
 if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
     pdf_bytes = gerar_pdf()
     st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{nome_para_arquivo}.pdf")
