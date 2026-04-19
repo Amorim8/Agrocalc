@@ -1,11 +1,13 @@
 import streamlit as st
 from fpdf import FPDF
+import math
 from datetime import datetime, timedelta
 
 # ---------------- CONFIGURAÇÕES INICIAIS ----------------
 SENHA_MESTRE = "@Lipe1928"
 data_hoje = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
 
+# ---------------- SISTEMA DE LOGIN ----------------
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
 
@@ -20,43 +22,26 @@ if not st.session_state['autenticado']:
             st.error("Senha incorreta!")
     st.stop()
 
-# ---------------- LÓGICA DE TABELA DE RECOMENDAÇÃO ----------------
-
-def obter_recomendacao_p2o5(p_solo, argila, cultura):
-    # 1. Definir Classes de Disponibilidade baseada na Argila
-    if argila > 60: faixas = [2.0, 4.0]
-    elif argila > 35: faixas = [3.0, 6.0]
-    elif argila > 15: faixas = [4.0, 9.0]
-    else: faixas = [6.0, 12.0]
+# ---------------- LÓGICA DE INTERPRETAÇÃO (ACRÉSCIMO) ----------------
+def interpretar_fosforo(p, argila):
+    # Interpretação técnica cruzando P com Teor de Argila
+    if argila > 60: limites = [2.0, 4.0]
+    elif argila > 35: limites = [3.0, 6.0]
+    elif argila > 15: limites = [4.0, 9.0]
+    else: limites = [6.0, 12.0]
     
-    if p_solo <= faixas[0]: status = "Baixo"
-    elif p_solo <= faixas[1]: status = "Médio"
-    else: status = "Alto"
+    if p <= limites[0]: return "Baixo"
+    if p <= limites[1]: return "Médio"
+    return "Alto"
 
-    # 2. Tabela de Recomendação (kg/ha de P2O5)
-    tabela = {
-        "Milho": {"Baixo": 120, "Médio": 80, "Alto": 40},
-        "Soja":  {"Baixo": 100, "Médio": 60, "Alto": 30},
-        "Palma": {"Baixo": 80,  "Médio": 40, "Alto": 20}
-    }
-    return tabela[cultura][status], status
+def interpretar_potassio(k):
+    # Interpretação técnica para Potássio (cmolc/dm3)
+    if k <= 0.15: return "Baixo"
+    if k <= 0.30: return "Médio"
+    return "Alto"
 
-def obter_recomendacao_k2o(k_solo, cultura):
-    # Classificação de Potássio
-    if k_solo <= 0.15: status = "Baixo"
-    elif k_solo <= 0.30: status = "Médio"
-    else: status = "Alto"
-
-    # Tabela de Recomendação (kg/ha de K2O)
-    tabela = {
-        "Milho": {"Baixo": 100, "Médio": 60, "Alto": 30},
-        "Soja":  {"Baixo": 80,  "Médio": 50, "Alto": 20},
-        "Palma": {"Baixo": 120, "Médio": 60, "Alto": 30}
-    }
-    return tabela[cultura][status], status
-
-# ---------------- CONFIGURAÇÃO VISUAL STREAMLIT ----------------
-st.set_page_config(page_title="Sistema de Prescrição Agronômica", layout="wide")
+# ---------------- CONFIG VISUAL (CONTRASTE MÁXIMO) ----------------
+st.set_page_config(page_title="Sistema de Prescrição Agronômica", layout="wide", page_icon="🌿")
 
 st.markdown("""
 <style>
@@ -67,103 +52,146 @@ div[data-testid="stMetric"] {
     padding: 20px;
     border-radius: 12px;
     border-left: 10px solid #16a34a !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
-div[data-testid="stMetricValue"] > div { color: #000000 !important; font-size: 34px !important; font-weight: 800 !important; }
-div[data-testid="stMetricLabel"] > div > p { color: #000000 !important; font-size: 16px !important; font-weight: 900 !important; text-transform: uppercase; }
+div[data-testid="stMetricValue"] > div { color: #000000 !important; font-size: 38px !important; font-weight: 800 !important; }
+div[data-testid="stMetricLabel"] > div > p { color: #000000 !important; font-size: 20px !important; font-weight: 900 !important; text-transform: uppercase; }
 .stButton>button { background-color: #16a34a !important; color: white !important; font-weight: bold; height: 3.5em; width: 100%; }
+.aviso-dados { background-color: #fffbeb; padding: 15px; border-radius: 8px; border-left: 5px solid #d97706; color: #92400e; font-weight: bold; margin-bottom: 25px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- COLETA DE DADOS ----------------
+# ---------------- SIDEBAR (PARÂMETROS) ----------------
 with st.sidebar:
-    st.header("📍 Localização")
-    nome_cliente = st.text_input("Produtor:")
-    fazenda = st.text_input("Fazenda:")
-    area = st.number_input("Área (ha):", value=1.0)
-    cultura = st.radio("Cultura Alvo:", ["Soja", "Milho", "Palma"])
-    variedade = ""
+    st.title("🌿 Parâmetros")
+    nome_cliente = st.text_input("👨‍🌾 Nome do Cliente:")
+    fazenda = st.text_input("🏠 Fazenda:")
+    municipio = st.text_input("🏙️ Município:")
+    estado = st.selectbox("🌎 Estado:", ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"])
+    
+    st.divider()
+    area = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.1, format="%.2f")
+    cultura = st.radio("🌱 Cultura de Interesse:", ["Soja", "Milho", "Palma"], horizontal=True)
+    
+    variedade_palma = ""
     if cultura == "Palma":
-        variedade = st.selectbox("Variedade:", ["Orelha de Elefante", "Palma Miúda"])
-    meta = st.number_input("Meta de Produção (t/ha):", value=8.0)
+        variedade_palma = st.selectbox("🌵 Variedade da Palma:", ["Orelha de Elefante", "Palma Miúda"])
+    
+    meta_padrao = 8.0 if cultura == "Milho" else (4.0 if cultura == "Soja" else 50.0)
+    meta_ton = st.number_input("🎯 Meta de Produtividade (t/ha):", value=meta_padrao)
 
+# ---------------- INTERFACE PRINCIPAL ----------------
 st.title("SISTEMA DE PRESCRIÇÃO AGRONÔMICA")
 
-st.subheader("📝 Dados da Análise de Solo")
-col1, col2, col3, col4 = st.columns(4)
-with col1: ph = st.number_input("pH (Água)", 5.5); p_mg = st.number_input("P (mg/dm³)", 8.0)
-with col2: al = st.number_input("Al (cmolc)", 0.0); k_cmol = st.number_input("K (cmolc)", 0.15)
-with col3: argila = st.number_input("Argila (%)", 35.0); v_at = st.number_input("V% Atual", 40.0)
-with col4: ctc = st.number_input("CTC (T)", 3.25); prnt = st.number_input("PRNT (%)", 85.0)
+st.markdown('<div class="aviso-dados">⚠️ NOTA IMPORTANTE: Todos os resultados e recomendações são baseados nos dados técnicos inseridos.</div>', unsafe_allow_html=True)
 
-# Lógica de Recomendação
-p_necessario, status_p = obter_recomendacao_p2o5(p_mg, argila, cultura)
-k_necessario, status_k = obter_recomendacao_k2o(k_cmol, cultura)
+st.subheader("Entrada de Dados da Análise de Solo")
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    ph_solo = st.number_input("pH (Água)", value=5.5)
+    p_solo = st.number_input("Fósforo (mg/dm³)", value=8.0)
+with c2:
+    al_solo = st.number_input("Alumínio (cmolc/dm³)", value=0.0)
+    k_solo = st.number_input("Potássio (cmolc/dm³)", value=0.15)
+with c3:
+    argila = st.number_input("Argila (%)", value=35.0)
+    v_atual = st.number_input("V% Atual", value=40.0)
+with c4:
+    ctc_t = st.number_input("CTC (T)", value=3.25)
+    prnt_calc = st.number_input("PRNT Calcário (%)", value=85.0)
 
-# ---------------- CÁLCULOS TÉCNICOS ----------------
+# EXECUÇÃO DA INTERPRETAÇÃO
+status_p = interpretar_fosforo(p_solo, argila)
+status_k = interpretar_potassio(k_solo)
+
+st.info(f"💡 **Diagnóstico:** P está **{status_p}** | K está **{status_k}** (Teor de Argila: {argila}%)")
+
+# ---------------- CÁLCULOS ----------------
 v_alvo = 70 if cultura in ["Soja", "Palma"] else 60
-nc = max(0, ((v_alvo - v_at) * ctc) / prnt)
+nc = max(0, ((v_alvo - v_atual) * ctc_t) / prnt_calc)
+total_calc = nc * area
+ng = (50 * argila)/1000 if (al_solo > 0.5 or argila > 40) else 0 
+total_gesso = ng * area
 
-st.subheader("🧪 Adubação Comercial")
-af1, af2, af3 = st.columns(3)
-fn = af1.number_input("N %", 4); fp = af2.number_input("P2O5 %", 20); fk = af3.number_input("K2O %", 20)
+n_total_ha = meta_ton * 25 if cultura == "Milho" else 0
+n_plantio_ha = n_total_ha * 0.20
+n_cobertura_ha = n_total_ha * 0.80
 
-# Dose baseada na necessidade da tabela dividida pela concentração do adubo
-dose_p = (p_necessario / (fp/100)) if fp > 0 else 0
-dose_k = (k_necessario / (fk/100)) if fk > 0 else 0
-dose_final_ha = max(dose_p, dose_k)
+st.subheader("Configuração da Fórmula Comercial (NPK)")
+f1, f2, f3 = st.columns(3)
+fn, fp, fk = f1.number_input("N (%)", 4), f2.number_input("P (%)", 20), f3.number_input("K (%)", 20)
+dose_ha = max(((meta_ton * 15)/fp*100) if fp>0 else 0, ((meta_ton * 20)/fk*100) if fk>0 else 0)
+total_adubo = dose_ha * area
 
-# ---------------- RESULTADOS EM TELA ----------------
+# ---------------- EXIBIÇÃO DE RESULTADOS NA TELA ----------------
 st.divider()
-st.success(f"Interpretação: Fósforo {status_p} | Potássio {status_k}")
-
+st.header("Resumo das Recomendações")
 r1, r2, r3 = st.columns(3)
 r1.metric("CALCÁRIO (T/HA)", f"{nc:.2f}")
-r2.metric("ADUBO (KG/HA)", f"{dose_final_ha:.0f}")
-r3.metric("ADUBO TOTAL (KG)", f"{(dose_final_ha * area):.0f}")
+st.write(f"Total: **{total_calc:.2f} t**")
+r2.metric("GESSO (T/HA)", f"{ng:.2f}")
+st.write(f"Total: **{total_gesso:.2f} t**")
+r3.metric("ADUBO (KG/HA)", f"{dose_ha:.0f}")
+st.write(f"Total: **{total_adubo:.1f} kg**")
 
-# ---------------- GERADOR DE PDF COM FORMATAÇÃO ORIGINAL ----------------
+if cultura == "Milho":
+    st.divider()
+    st.header("📊 Detalhamento de Nitrogênio (N)")
+    col_n1, col_n2 = st.columns(2)
+    with col_n1: st.metric("N NO PLANTIO (20%)", f"{n_plantio_ha:.1f} kg/ha")
+    with col_n2: st.metric("N NA COBERTURA (80%)", f"{n_cobertura_ha:.1f} kg/ha")
+
+# ---------------- GERAÇÃO DO PDF ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
-    def txt(t): return str(t).encode('cp1252', 'replace').decode('cp1252')
+    def txt(texto): return str(texto).encode('cp1252', 'replace').decode('cp1252')
 
-    # Cabeçalho Original Verde
+    # Banner Superior Original
     pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255); pdf.set_font("Helvetica", "B", 18); pdf.ln(12)
     pdf.cell(190, 10, txt("PRESCRIÇÃO TÉCNICA AGRONÔMICA"), 0, 1, "C")
-    pdf.set_font("Helvetica", "", 12); pdf.cell(190, 7, txt(f"Consultoria: Felipe Amorim | Data: {data_hoje}"), 0, 1, "C")
+    pdf.set_font("Helvetica", "", 12); pdf.cell(190, 7, txt(f"Data de Emissão: {data_hoje}"), 0, 1, "C")
     
-    # Corpo do PDF
+    # 1. DADOS DA ANÁLISE (INSERIDO CONFORME PEDIDO)
     pdf.set_text_color(0, 0, 0); pdf.ln(25)
-    
-    # Seção 1: Dados da Análise
-    pdf.set_font("Helvetica", "B", 12); pdf.set_fill_color(230, 230, 230)
-    pdf.cell(190, 8, txt("1. RESULTADOS DA ANÁLISE DE SOLO"), 1, 1, "L", fill=True)
+    pdf.set_font("Helvetica", "B", 12); pdf.set_fill_color(235, 235, 235)
+    pdf.cell(190, 8, txt("1. DADOS DA ANÁLISE DE SOLO E INTERPRETAÇÃO"), 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 10); pdf.ln(2)
-    pdf.cell(95, 7, txt(f"pH: {ph} | Al: {al} | CTC: {ctc}"), 0, 0)
-    pdf.cell(95, 7, txt(f"Argila: {argila}% | V% Atual: {v_at}%"), 0, 1)
+    pdf.cell(190, 7, txt(f"pH: {ph_solo} | Alumínio: {al_solo} | CTC: {ctc_t} | Argila: {argila}% | V% Atual: {v_atual}%"), 0, 1)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(95, 7, txt(f"Fósforo: {p_mg} mg/dm3 ({status_p})"), 1, 0)
-    pdf.cell(95, 7, txt(f"Potássio: {k_cmol} cmolc/dm3 ({status_k})"), 1, 1)
+    pdf.cell(190, 8, txt(f"FÓSFORO (P): {p_solo} mg/dm3 -> ({status_p}) | POTÁSSIO (K): {k_solo} cmolc/dm3 -> ({status_k})"), 1, 1, "L")
 
-    # Seção 2: Recomendações
+    # 2. Informações da Propriedade
     pdf.ln(5); pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(190, 8, txt("2. PRESCRIÇÃO E RECOMENDAÇÃO"), 1, 1, "L", fill=True)
+    pdf.cell(190, 8, txt("2. INFORMAÇÕES DA PROPRIEDADE"), 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 11); pdf.ln(2)
-    pdf.cell(190, 7, txt(f"Propriedade: {fazenda} | Cultura: {cultura} {variedade}"), 0, 1)
-    pdf.cell(190, 7, txt(f"- Necessidade Calcário: {nc:.2f} t/ha"), 0, 1)
-    pdf.cell(190, 7, txt(f"- Demanda P2O5 (Tabela): {p_necessario} kg/ha"), 0, 1)
-    pdf.cell(190, 7, txt(f"- Demanda K2O (Tabela): {k_necessario} kg/ha"), 0, 1)
-    pdf.ln(2)
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(190, 9, txt(f"DOSE DO ADUBO ({fn}-{fp}-{fk}): {dose_final_ha:.0f} kg/ha"), 1, 1, "C", fill=True)
+    pdf.cell(190, 7, txt(f"Cliente: {nome_cliente} | Fazenda: {fazenda}"), 0, 1)
+    txt_cultura = f"Cultura: {cultura}"
+    if cultura == "Palma": txt_cultura += f" ({variedade_palma})"
+    pdf.cell(190, 7, txt(f"{txt_cultura} | Área: {area} ha | Produtividade: {meta_ton} t/ha"), 0, 1)
 
-    # Rodapé
-    pdf.ln(20); pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 7, txt("Responsável Técnico: Felipe Amorim"), 0, 1, "R")
+    # 3. Recomendações Técnicas
+    pdf.ln(5); pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(190, 8, txt("3. PRESCRIÇÃO TÉCNICA DE MANEJO"), 1, 1, "L", fill=True)
+    pdf.set_font("Helvetica", "", 11); pdf.ln(2)
+    pdf.cell(190, 7, txt(f"- Calcário: {nc:.2f} t/ha (Total: {total_calc:.2f} t)"), 0, 1)
+    pdf.cell(190, 7, txt(f"- Gesso: {ng:.2f} t/ha (Total: {total_gesso:.2f} t)"), 0, 1)
+    pdf.cell(190, 7, txt(f"- Adubo Comercial NPK: {dose_ha:.0f} kg/ha (Fórmula: {fn}-{fp}-{fk})"), 0, 1)
+
+    if cultura == "Palma":
+        pdf.ln(5); pdf.set_font("Helvetica", "B", 12); pdf.set_fill_color(210, 255, 210)
+        pdf.cell(190, 8, txt(f"4. ORIENTAÇÕES DE MANEJO ({variedade_palma.upper()})"), 1, 1, "L", fill=True)
+        pdf.set_font("Helvetica", "", 10); pdf.ln(2)
+        pdf.multi_cell(190, 6, txt("- NÃO CORTAR O CLADÓDIO MÃE: Prática essencial para longevidade.\n- CICLO DE COLHEITA: Realizar entre 18 a 24 meses pós-plantio."))
+
+    # Assinatura
+    pdf.ln(15); pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 7, txt(f"Responsável Técnico: Felipe Amorim"), 0, 1, "R")
+    
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
-if st.button("📄 GERAR PDF COMPLETO"):
+if st.button("📄 GERAR RELATÓRIO PDF COMPLETO"):
     pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Prescricao_{nome_cliente}.pdf")
+    st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Prescricao_{nome_cliente}.pdf", mime="application/pdf")
