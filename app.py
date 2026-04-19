@@ -47,7 +47,6 @@ st.markdown("""
         width: 100%;
         height: 3em;
     }
-    /* Estilo para alerts e warnings */
     .stAlert {
         border-radius: 10px;
         border-left: 5px solid;
@@ -290,13 +289,19 @@ def gerar_pdf():
     data_pdf = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
     
     # Cabeçalho
-    pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
-    pdf.set_text_color(255, 255, 255); pdf.set_font("Helvetica", "B", 16)
+    pdf.set_fill_color(34, 139, 34)
+    pdf.rect(0, 0, 210, 45, 'F')
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 16)
     pdf.cell(190, 15, fix_txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
-    pdf.set_font("Helvetica", "", 10); pdf.cell(190, 5, fix_txt(f"Consultor: Felipe Amorim | Data: {data_pdf}"), align="C", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(190, 5, fix_txt(f"Consultor: Felipe Amorim | Data: {data_pdf}"), align="C", ln=True)
     
     # Dados Gerais
-    pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(15)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_font("Helvetica", "B", 11)
     pdf.cell(190, 8, fix_txt(" 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO"), ln=True, fill=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(190, 7, fix_txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Não informado'} | Fazenda: {fazenda}"), ln=True)
@@ -308,7 +313,9 @@ def gerar_pdf():
     pdf.cell(190, 6, fix_txt(f" Fósforo: {p_solo} mg/dm³ ({nivel_p}) | Potássio: {k_solo} cmolc/dm³ ({nivel_k})"), ln=True)
     
     # Prescrição Técnica
-    pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Helvetica", "B", 11)
+    pdf.ln(5)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_font("Helvetica", "B", 11)
     pdf.cell(190, 8, fix_txt(" 2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(190, 7, fix_txt(f" Calagem: {nc:.2f} t/ha (Total para a área: {total_calc:.2f} t)"), ln=True)
@@ -326,7 +333,8 @@ def gerar_pdf():
         pdf.cell(190, 6, fix_txt(f"  - Aplicação no Plantio: {n_plantio} kg/ha"), ln=True)
         pdf.cell(190, 6, fix_txt(f"  - Aplicação em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
     
-    pdf.set_font("Helvetica", "B", 10); pdf.ln(2)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.ln(2)
     d_p = (rec_p / f_p * 100) if f_p > 0 else 0
     d_k = (rec_k / f_k * 100) if f_k > 0 else 0
     d_final_pdf = max(d_p, d_k)
@@ -335,13 +343,13 @@ def gerar_pdf():
     pdf.cell(190, 7, fix_txt(f" Adubação Sugerida: {d_final_pdf:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
     pdf.cell(190, 7, fix_txt(f" Necessidade de Compra: {t_sacos_pdf} sacos (50kg) para a área total."), ln=True)
     
-    # Recomendação de nutrientes
+    # Recomendação de nutrientes (sem subscritos para evitar pontos de interrogação)
     pdf.ln(3)
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(190, 6, fix_txt(" Recomendação de Nutrientes:"), ln=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.cell(95, 5, fix_txt(f" P₂O₅ recomendado: {rec_p:.0f} kg/ha"), ln=False)
-    pdf.cell(95, 5, fix_txt(f" K₂O recomendado: {rec_k:.0f} kg/ha"), ln=True)
+    pdf.cell(95, 5, fix_txt(f" P2O5 recomendado: {rec_p:.0f} kg/ha"), ln=False)
+    pdf.cell(95, 5, fix_txt(f" K2O recomendado: {rec_k:.0f} kg/ha"), ln=True)
 
     # Checklist de segurança no PDF
     pdf.ln(5)
@@ -375,15 +383,21 @@ def gerar_pdf():
         pdf.cell(190, 5, fix_txt(" [INFO] Potássio no solo já está BOM - adubação reduzida pela metade"), ln=True)
 
     # Nota de Responsabilidade
-    pdf.ln(5); pdf.set_fill_color(255, 235, 235); pdf.set_font("Helvetica", "B", 9)
+    pdf.ln(5)
+    pdf.set_fill_color(255, 235, 235)
+    pdf.set_font("Helvetica", "B", 9)
     pdf.cell(190, 7, fix_txt(" NOTA DE RESPONSABILIDADE TÉCNICA"), ln=True, fill=True)
-    pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(100, 0, 0)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(100, 0, 0)
     pdf.multi_cell(190, 4, fix_txt("Esta recomendação baseia-se exclusivamente nos dados fornecidos pelo usuário. O sucesso da cultura depende de fatores climáticos, fitossanitários e do manejo correto no campo."))
 
     # Fontes
-    pdf.ln(5); pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(34, 139, 34)
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(34, 139, 34)
     pdf.cell(190, 8, fix_txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
-    pdf.set_font("Helvetica", "I", 9); pdf.set_text_color(50, 50, 50)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_text_color(50, 50, 50)
     
     if cultura == "Soja":
         ref_texto = "- Interpretação de Solo: Embrapa Soja.\n- Exportação e Extração: Manual de Adubação e Calagem para o Estado do Paraná (SBCS).\n- Calagem: Método da Elevação da Saturação por Bases (V%)."
