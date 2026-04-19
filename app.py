@@ -215,17 +215,23 @@ def gerar_pdf():
     pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(100, 0, 0)
     pdf.multi_cell(190, 4, fix_txt("Esta recomendação baseia-se exclusivamente nos dados fornecidos pelo usuário. O sucesso da cultura depende de fatores climáticos, fitossanitários e do manejo correto no campo."))
 
-    # Fontes
+    # Fontes (LÓGICA ALTERADA AQUI)
     pdf.ln(5); pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(34, 139, 34)
     pdf.cell(190, 8, fix_txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
     pdf.set_font("Helvetica", "I", 9); pdf.set_text_color(50, 50, 50)
-    pdf.multi_cell(190, 5, fix_txt("- Interpretação de Solo: Embrapa Cerrados / Embrapa Soja.\n- Exportação e Extração: IPNI Brasil.\n- Calagem: Método da Elevação da Saturação por Bases (V%)."))
+    
+    if cultura == "Soja":
+        ref_texto = "- Interpretação de Solo: Embrapa Soja.\n- Exportação e Extração: Manual de Adubação e Calagem para o Estado do Paraná (SBCS).\n- Calagem: Método da Elevação da Saturação por Bases (V%)."
+    else: # Caso seja Milho
+        ref_texto = "- Interpretação de Solo: Embrapa Milho e Sorgo.\n- Exportação e Extração: IPNI Brasil.\n- Calagem: Método da Elevação da Saturação por Bases (V%)."
+        
+    pdf.multi_cell(190, 5, fix_txt(ref_texto))
     
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
 st.warning("⚠️ **Aviso:** Esta ferramenta é um auxílio à decisão.")
-if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
+if st.button("📄 GERAR RELATÓRIO"):
     pdf_bytes = gerar_pdf()
     st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{nome_para_arquivo}.pdf")
 
