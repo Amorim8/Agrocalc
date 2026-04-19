@@ -22,14 +22,14 @@ if not st.session_state['autenticado']:
             st.error("Senha incorreta!")
     st.stop()
 
-# ---------------- CONFIG VISUAL (CSS DE ALTA VISIBILIDADE) ----------------
+# ---------------- CONFIG VISUAL (CSS) ----------------
 st.set_page_config(page_title="Felipe Amorim | Consultoria Agronômica", layout="wide", page_icon="🌿")
 
 st.markdown("""
 <style>
 .main { background-color: #0e1117; }
 
-/* Estilização das métricas para leitura clara no modo escuro */
+/* Estilização das caixas de métricas */
 div[data-testid="stMetric"] {
     background: linear-gradient(145deg, #1f2937, #111827) !important;
     border: 1px solid #374151;
@@ -38,17 +38,18 @@ div[data-testid="stMetric"] {
     border-left: 6px solid #22c55e !important;
 }
 
-/* Força a cor do valor da métrica para branco puro */
+/* COR DO NÚMERO (Branco) */
 div[data-testid="stMetricValue"] > div {
     color: #ffffff !important;
     font-size: 32px !important;
     font-weight: bold !important;
 }
 
-/* Força a cor do rótulo para cinza claro */
+/* COR DO NOME/RÓTULO (Branco para visibilidade total) */
 div[data-testid="stMetricLabel"] > div > p {
-    color: #e5e7eb !important;
-    font-size: 16px !important;
+    color: #ffffff !important;
+    font-size: 18px !important;
+    font-weight: 500 !important;
 }
 
 .stButton>button {
@@ -70,7 +71,7 @@ div[data-testid="stMetricLabel"] > div > p {
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- SIDEBAR (PARÂMETROS DE ENTRADA) ----------------
+# ---------------- SIDEBAR (PARÂMETROS) ----------------
 with st.sidebar:
     st.title("🌿 Parâmetros")
     nome_cliente = st.text_input("👨‍🌾 Nome do Cliente:")
@@ -82,14 +83,17 @@ with st.sidebar:
     area = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.1, format="%.2f")
     cultura = st.radio("🌱 Cultura de Interesse:", ["Soja", "Milho", "Palma"], horizontal=True)
     
-    # Meta de produtividade ajustada por cultura
+    # Seleção de Variedade para Palma
+    variedade_palma = ""
+    if cultura == "Palma":
+        variedade_palma = st.selectbox("🌵 Variedade da Palma:", ["Orelha de Elefante", "Palma Miúda"])
+    
     meta_padrao = 8.0 if cultura == "Milho" else (4.0 if cultura == "Soja" else 50.0)
     meta_ton = st.number_input("🎯 Meta de Produtividade (t/ha):", value=meta_padrao)
 
 # ---------------- INTERFACE PRINCIPAL ----------------
 st.title("SISTEMA DE PRESCRIÇÃO | FELIPE AMORIM")
 
-# Aviso obrigatório sobre a origem dos resultados
 st.markdown('<div class="aviso-dados">⚠️ NOTA IMPORTANTE: Todos os resultados e recomendações gerados são calculados estritamente de acordo com os dados técnicos inseridos nesta calculadora.</div>', unsafe_allow_html=True)
 
 st.subheader("Entrada de Dados da Análise de Solo")
@@ -107,65 +111,59 @@ with c4:
     ctc_t = st.number_input("CTC (T)", value=3.25)
     prnt_calc = st.number_input("PRNT Calcário (%)", value=85.0)
 
-# ---------------- LÓGICA DE CÁLCULO AGRONÔMICO ----------------
-# 1. Calagem
+# ---------------- LÓGICA DE CÁLCULO ----------------
 v_alvo = 70 if cultura in ["Soja", "Palma"] else 60
 nc = max(0, ((v_alvo - v_atual) * ctc_t) / prnt_calc)
 total_calc = nc * area
 
-# 2. Gessagem
 ng = (50 * argila)/1000 if (al_solo > 0.5 or argila > 40) else 0 
 total_gesso = ng * area
 
-# 3. Manejo de Nitrogênio (N) - Específico para Milho (Embrapa)
 n_total_ha = meta_ton * 25 if cultura == "Milho" else 0
 n_plantio_ha = n_total_ha * 0.20
 n_cobertura_ha = n_total_ha * 0.80
 total_n_plantio = n_plantio_ha * area
 total_n_cobertura = n_cobertura_ha * area
 
-# 4. Adubação NPK Comercial
 st.subheader("Configuração da Fórmula Comercial (NPK)")
 f1, f2, f3 = st.columns(3)
-fn, fp, fk = f1.number_input("N % na Fórmula", 4), f2.number_input("P % na Fórmula", 20), f3.number_input("K % na Fórmula", 20)
+fn, fp, fk = f1.number_input("N %", 4), f2.number_input("P %", 20), f3.number_input("K %", 20)
 
-# Cálculo simplificado de dose baseado em exportação/meta
 dose_ha = max(((meta_ton * 15)/fp*100) if fp>0 else 0, ((meta_ton * 20)/fk*100) if fk>0 else 0)
 total_adubo = dose_ha * area
 
-# ---------------- EXIBIÇÃO DE RESULTADOS ----------------
+# ---------------- RESULTADOS NA TELA ----------------
 st.divider()
 st.header("Resumo das Recomendações")
 
 res1, res2, res3 = st.columns(3)
 res1.metric("Calcário (t/ha)", f"{nc:.2f}")
-st.write(f"**Total para a Área:** {total_calc:.2f} t")
+st.write(f"**Total Área:** {total_calc:.2f} t")
 
 res2.metric("Gesso (t/ha)", f"{ng:.2f}")
-st.write(f"**Total para a Área:** {total_gesso:.2f} t")
+st.write(f"**Total Área:** {total_gesso:.2f} t")
 
 res3.metric("Adubo Comercial (kg/ha)", f"{dose_ha:.0f}")
-st.write(f"**Total para a Área:** {total_adubo:.1f} kg")
+st.write(f"**Total Área:** {total_adubo:.1f} kg")
 
-# Seção de Nitrogênio para Milho
 if cultura == "Milho":
     st.divider()
-    st.header("📊 Manejo Detalhado de Nitrogênio (N)")
+    st.header("📊 Detalhamento de Nitrogênio (N)")
     col_n1, col_n2 = st.columns(2)
     with col_n1:
         st.metric("N no Plantio (20%)", f"{n_plantio_ha:.1f} kg/ha")
-        st.success(f"**Total de N Puro:** {total_n_plantio:.1f} kg")
+        st.success(f"**Total:** {total_n_plantio:.1f} kg de N")
     with col_n2:
         st.metric("N na Cobertura (80%)", f"{n_cobertura_ha:.1f} kg/ha")
-        st.success(f"**Total de N Puro:** {total_n_cobertura:.1f} kg")
+        st.success(f"**Total:** {total_n_cobertura:.1f} kg de N")
 
-# ---------------- GERAÇÃO DO PDF PROFISSIONAL ----------------
+# ---------------- GERAÇÃO DO PDF ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     def fix(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
 
-    # Banner Superior
+    # Cabeçalho
     pdf.set_fill_color(34, 139, 34)
     pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255)
@@ -175,75 +173,62 @@ def gerar_pdf():
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(190, 7, fix(f"Consultoria: Felipe Amorim | Data: {data_hoje}"), 0, 1, "C")
     
-    # Aviso de Dados e Identificação
-    pdf.set_text_color(0, 0, 0)
+    # Aviso de Responsabilidade no PDF
+    pdf.set_text_color(200, 0, 0)
     pdf.ln(18)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.set_text_color(200, 0, 0) # Vermelho para o aviso
-    pdf.cell(190, 8, fix("AVISO: Resultados baseados estritamente nos dados inseridos na calculadora."), 0, 1, "C")
-    pdf.set_text_color(0, 0, 0)
+    pdf.cell(190, 8, fix("AVISO: Resultados baseados estritamente na colocacao dos dados na calculadora."), 0, 1, "C")
     
+    pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(190, 8, fix("1. DADOS DO CLIENTE E PROPRIEDADE"), 1, 1, "L", fill=True)
+    pdf.cell(190, 8, fix("1. IDENTIFICAÇÃO"), 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 11)
     pdf.ln(2)
     pdf.cell(190, 7, fix(f"Produtor: {nome_cliente} | Fazenda: {fazenda}"), 0, 1)
-    pdf.cell(190, 7, fix(f"Local: {municipio} - {estado} | Area: {area:g} ha"), 0, 1)
-    pdf.cell(190, 7, fix(f"Cultura: {cultura} | Meta de Produtividade: {meta_ton} t/ha"), 0, 1)
+    
+    txt_cultura = f"Cultura: {cultura}"
+    if cultura == "Palma": txt_cultura += f" ({variedade_palma})"
+    pdf.cell(190, 7, fix(f"{txt_cultura} | Meta: {meta_ton} t/ha"), 0, 1)
 
-    # Recomendações de Solo
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(190, 8, fix("2. RECOMENDAÇÕES DE CORREÇÃO E ADUBAÇÃO"), 1, 1, "L", fill=True)
+    pdf.cell(190, 8, fix("2. RECOMENDAÇÕES DE CORREÇÃO"), 1, 1, "L", fill=True)
     pdf.set_font("Helvetica", "", 11)
     pdf.ln(2)
-    pdf.cell(190, 7, fix(f"- Calcario: {nc:.2f} t/ha (Total area: {total_calc:.2f} t)"), 0, 1)
-    pdf.cell(190, 7, fix(f"- Gesso: {ng:.2f} t/ha (Total area: {total_gesso:.2f} t)"), 0, 1)
-    pdf.cell(190, 7, fix(f"- Adubo Comercial: {dose_ha:.0f} kg/ha (Total area: {total_adubo:.1f} kg)"), 0, 1)
+    pdf.cell(190, 7, fix(f"- Calcario: {nc:.2f} t/ha | Gesso: {ng:.2f} t/ha"), 0, 1)
+    pdf.cell(190, 7, fix(f"- Adubo Comercial NPK: {dose_ha:.0f} kg/ha"), 0, 1)
 
-    # Seção Milho
-    if cultura == "Milho":
-        pdf.ln(5)
-        pdf.set_font("Helvetica", "B", 12)
-        pdf.set_fill_color(200, 220, 255)
-        pdf.cell(190, 8, fix("3. MANEJO ESPECÍFICO DE NITROGÊNIO (N)"), 1, 1, "L", fill=True)
-        pdf.set_font("Helvetica", "", 11)
-        pdf.ln(2)
-        pdf.cell(190, 7, fix(f"- N no Plantio (20%): {n_plantio_ha:.1f} kg/ha (Total: {total_n_plantio:.1f} kg)"), 0, 1)
-        pdf.cell(190, 7, fix(f"- N na Cobertura (80%): {n_cobertura_ha:.1f} kg/ha (Total: {total_n_cobertura:.1f} kg)"), 0, 1)
-
-    # Seção Palma (Manejo solicitado)
     if cultura == "Palma":
         pdf.ln(5)
         pdf.set_font("Helvetica", "B", 12)
         pdf.set_fill_color(210, 255, 210)
-        pdf.cell(190, 8, fix("3. RECOMENDAÇÕES TÉCNICAS PARA PALMA"), 1, 1, "L", fill=True)
+        pdf.cell(190, 8, fix(f"3. MANEJO TÉCNICO ({variedade_palma.upper()})"), 1, 1, "L", fill=True)
         pdf.set_font("Helvetica", "", 10)
         pdf.ln(2)
-        pdf.multi_cell(190, 6, fix("- MANEJO DO CLADODIO: Nao realizar o corte no cladodio-mae. Ele deve ser preservado para garantir a longevidade e o rebrote do palmal.\n- PRIMEIRO CORTE: Deve ser realizado entre 18 a 24 meses apos o plantio, conforme o vigor das raquetes.\n- ALTURA DE CORTE: Respeitar a arquitetura da planta para evitar estresse hidrico e pragas."))
+        pdf.multi_cell(190, 6, fix("- NAO CORTAR O CLADODIO MAE: Preservar para garantir a longevidade.\n- PRIMEIRO CORTE: Realizar entre 18 a 24 meses apos o plantio.\n- ADUBACAO: Baseada na meta de produtividade inserida."))
 
-    # Referências Dinâmicas
+    # Referências Dinâmicas por Cultura
     pdf.ln(10)
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(190, 8, fix(f"REFERÊNCIAS TÉCNICAS UTILIZADAS ({cultura.upper()})"), 0, 1)
+    pdf.cell(190, 8, fix(f"REFERÊNCIAS TÉCNICAS ({cultura.upper()})"), 0, 1)
     pdf.set_font("Helvetica", "I", 9)
     if cultura == "Milho":
-        pdf.multi_cell(190, 5, fix("- EMBRAPA Milho e Sorgo: Recomendacoes para o uso de corretivos e fertilizantes.\n- EMBRAPA: Sistema de producao de Milho (Manejo de N em cobertura).\n- Manual de Adubacao e Calagem (Tabelas de extracao por meta de produtividade)."))
+        pdf.multi_cell(190, 5, fix("- EMBRAPA Milho e Sorgo: Recomendacoes e Manejo de Nitrogenio."))
     elif cultura == "Soja":
-        pdf.multi_cell(190, 5, fix("- SBCS: Manual de Calagem e Adubacao para a cultura da Soja.\n- EMBRAPA Soja: Tecnologias de producao de soja (Critérios de V% e P/K).\n- Manual de Recomendacoes de Adubacao para o Cerrado."))
+        pdf.multi_cell(190, 5, fix("- SBCS: Manual de Calagem e Adubacao para Soja."))
     elif cultura == "Palma":
-        pdf.multi_cell(190, 5, fix("- IPA (Instituto Agronomico de Pernambuco): Manual de Cultivo e Recomendacao de Adubacao para Palma Forrageira.\n- IPA: Instrucoes sobre o manejo de cortes e preservacao de cladodios.\n- Pesquisas Regionais: Manejo de variedades Sertania, Miuda e Orelha de Elefante."))
+        pdf.multi_cell(190, 5, fix("- IPA: Manual de Cultivo e Recomendacao para variedades Miuda e Orelha de Elefante."))
 
     pdf.ln(10)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 7, fix("Responsável Técnico: Felipe Amorim"), 0, 1, "R")
+    pdf.cell(190, 7, fix("Consultoria Técnica: Felipe Amorim"), 0, 1, "R")
     
     return pdf.output(dest='S').encode('latin-1')
 
-# ---------------- BOTÃO DE DOWNLOAD ----------------
+# ---------------- DOWNLOAD ----------------
 st.divider()
 if st.button("📄 GERAR RELATÓRIO PDF COMPLETO"):
     pdf_bytes = gerar_pdf()
-    st.download_button("⬇️ Clique aqui para Baixar o PDF", pdf_bytes, file_name=f"Prescricao_{cultura}_{nome_cliente}.pdf", mime="application/pdf")
+    st.download_button("⬇️ Baixar Relatório PDF", pdf_bytes, file_name=f"Prescricao_{cultura}_{nome_cliente}.pdf", mime="application/pdf")
