@@ -47,6 +47,17 @@ st.markdown("""
         width: 100%;
         height: 3em;
     }
+    /* Estilo para alerts e warnings */
+    .stAlert {
+        border-radius: 10px;
+        border-left: 5px solid;
+    }
+    div[data-testid="stWarning"] {
+        border-left-color: #ffc107;
+    }
+    div[data-testid="stError"] {
+        border-left-color: #dc3545;
+    }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
@@ -89,9 +100,12 @@ with col2:
     argila = st.number_input("Argila (%)", 0.0, 100.0, value=35.0)
     v_atual = st.number_input("V% Atual", 0.0, 100.0, value=40.0)
     al_solo = st.number_input("Alumínio (cmolc/dm³)", 0.0, value=0.0)
+    # 🔧 NOVA ENTRADA: Cálcio e Enxofre para gessagem mais precisa
+    ca_solo = st.number_input("Cálcio (cmolc/dm³)", 0.0, value=1.5, help="Importante para cálculo mais preciso da gessagem")
 with col3:
     ctc = st.number_input("CTC (cmolc/dm³)", 0.0, value=3.25)
     prnt = st.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
+    s_solo = st.number_input("Enxofre (mg/dm³)", 0.0, value=8.0, help="Importante para necessidade de gesso")
 
 # ---------------- LÓGICA TÉCNICA ----------------
 def interpretar_solo(p, k, arg):
@@ -107,20 +121,60 @@ v_alvo = 70 if cultura == "Soja" else 60
 nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
 total_calc = nc * area
 
+# 🔧 ALTERAÇÃO 1: Gessagem com limite de segurança e critério adicional
 m_atual = (al_solo / (al_solo + (ctc - al_solo))) * 100 if (al_solo + (ctc - al_solo)) > 0 else 0
-ng = (argila * 50) / 1000 if (m_atual > 20 or al_solo > 0.5) else 0.0
+ng_base = (argila * 50) / 1000 if (m_atual > 20 or al_solo > 0.5) else 0.0
+
+# Critério adicional: saturação por Alumínio
+sat_al = al_solo / ctc * 100 if ctc > 0 else 0
+
+# Limite máximo de segurança para gessagem
+ng = ng_base
+if ng_base > 0:
+    if sat_al > 20:
+        ng = min(ng_base, 2.0)  # limite máximo de segurança quando saturação de Al é alta
+        if ng_base > 2.0:
+            st.warning(f"⚠️ **Gessagem reduzida para segurança:** O cálculo original indicava {ng_base:.2f} t/ha, mas devido à alta saturação de alumínio ({sat_al:.1f}%), a dose foi limitada a 2.0 t/ha para evitar lixiviação de nutrientes.")
+    
+    # Verificação adicional para solos com bom teor de Ca
+    if ca_solo > 3.0:
+        ng = min(ng, 1.5)
+        st.info(f"ℹ️ **Gessagem ajustada:** Solo com bom teor de cálcio ({ca_solo:.1f} cmolc/dm³). Dose reduzida para {ng:.2f} t/ha para evitar excesso.")
+
 total_gesso = ng * area
 
+# 🔧 ALTERAÇÃO 2: Recomendação de P e K com limite para solos com teores altos
 n_plantio, n_cobertura = 0, 0
 if cultura == "Soja":
     rec_n, rec_p = 0, (meta_ton * 15) * (1.5 if nivel_p == "Baixo" else 1.0)
     rec_k = (meta_ton * 20) * (1.4 if nivel_k == "Baixo" else 1.0)
-else:
+    
+    # Se P já está Bom, reduz recomendação
+    if nivel_p == "Bom":
+        rec_p = rec_p * 0.5
+        st.info(f"ℹ️ **Fósforo reduzido:** Nível atual de P é BOM ({p_solo} mg/dm³). Recomendação ajustada para {rec_p:.0f} kg/ha de P₂O₅.")
+    
+    # Se K já está Bom, reduz recomendação
+    if nivel_k == "Bom":
+        rec_k = rec_k * 0.5
+        st.info(f"ℹ️ **Potássio reduzido:** Nível atual de K é BOM ({k_solo} cmolc/dm³). Recomendação ajustada para {rec_k:.0f} kg/ha de K₂O.")
+        
+else:  # Milho
     rec_n = meta_ton * 22
     n_plantio = 30
     n_cobertura = max(0.0, rec_n - n_plantio)
     rec_p = (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0)
     rec_k = (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
+    
+    # Se P já está Bom, reduz recomendação
+    if nivel_p == "Bom":
+        rec_p = rec_p * 0.5
+        st.info(f"ℹ️ **Fósforo reduzido:** Nível atual de P é BOM ({p_solo} mg/dm³). Recomendação ajustada para {rec_p:.0f} kg/ha de P₂O₅.")
+    
+    # Se K já está Bom, reduz recomendação
+    if nivel_k == "Bom":
+        rec_k = rec_k * 0.5
+        st.info(f"ℹ️ **Potássio reduzido:** Nível atual de K é BOM ({k_solo} cmolc/dm³). Recomendação ajustada para {rec_k:.0f} kg/ha de K₂O.")
 
 # ---------------- 2️⃣ DASHBOARD ----------------
 st.divider()
@@ -144,6 +198,9 @@ with r2:
     st.markdown("### ⚪ Gessagem")
     st.metric("Dose (t/ha)", f"{ng:.2f}")
     st.write(f"Total: **{total_gesso:.2f} t**")
+    # 🔧 NOVA INFORMAÇÃO: Exibe cálculo original se foi reduzido
+    if ng_base > ng:
+        st.caption(f"↪️ Cálculo original: {ng_base:.2f} t/ha")
 with r3:
     if cultura == "Milho":
         nc1, nc2, nc3 = st.columns(3)
@@ -160,7 +217,54 @@ with r3:
         dose_k = (rec_k / f_k * 100) if f_k > 0 else 0
         dose_final = max(dose_p, dose_k)
         total_sacos = math.ceil((dose_final * area) / 50)
+        
+        # 🔧 ALTERAÇÃO 3: Validação do N no plantio para milho
+        if cultura == "Milho" and f_n > 0:
+            n_fornecido = (dose_final * f_n) / 100
+            if n_fornecido > n_plantio * 1.1:
+                st.warning(f"⚠️ **ATENÇÃO - NITROGÊNIO EXCESSIVO NO PLANTIO!**\n\nO formulado {f_n}-{f_p}-{f_k} na dose de {dose_final:.0f} kg/ha fornece **{n_fornecido:.0f} kg/ha de N** no plantio, acima dos {n_plantio} kg/ha recomendados.\n\n**Sugestões:**\n• Reduza a dose do formulado e complemente com P/K separados\n• Troque para um formulado com menor teor de N (ex: 4-20-20)\n• Use ureia ou sulfato de amônio apenas em cobertura")
+            elif n_fornecido > n_plantio:
+                st.info(f"ℹ️ O formulado fornece {n_fornecido:.0f} kg/ha de N no plantio. Ajuste a adubação de cobertura para {(rec_n - n_fornecido):.0f} kg/ha.")
+        
+        # 🔧 ALTERAÇÃO 4: Validação da dose máxima para evitar desperdício
+        dose_max_recomendada = max(rec_p, rec_k) * 1.5 if (rec_p > 0 or rec_k > 0) else 500
+        if dose_final > dose_max_recomendada and dose_max_recomendada > 0:
+            st.error(f"⚠️ **Dose muito elevada!** A dose calculada ({dose_final:.0f} kg/ha) está muito acima do necessário. Verifique os teores de P e K no solo ou ajuste a formulação.")
+        
         st.success(f"Dose: {dose_final:.0f} kg/ha | Total: {total_sacos} sacos")
+
+# 🔧 NOVA SEÇÃO: Checklist de segurança para o cliente
+st.divider()
+st.subheader("✅ Checklist de Segurança para Aplicação")
+col_check1, col_check2, col_check3 = st.columns(3)
+
+with col_check1:
+    st.markdown("**🪨 Calagem**")
+    if nc > 5.0:
+        st.error("❌ Dose de calcário muito alta - parcelar aplicação")
+    elif nc > 3.0:
+        st.warning("⚠️ Dose alta - aplicar com antecedência mínima de 90 dias")
+    else:
+        st.success("✅ Dose dentro do recomendado")
+
+with col_check2:
+    st.markdown("**⚪ Gessagem**")
+    if ng > 2.0:
+        st.error("❌ Gessagem elevada - risco de lixiviação de K e Mg")
+    elif ng > 1.0:
+        st.warning("⚠️ Gessagem moderada - verificar necessidade de Ca e S")
+    else:
+        st.success("✅ Dose segura")
+
+with col_check3:
+    st.markdown("**🌽 Nitrogênio (Milho)**")
+    if cultura == "Milho":
+        if n_cobertura > 120:
+            st.warning("⚠️ N em cobertura alto - parcelar em V4 e V6")
+        else:
+            st.success("✅ N em cobertura adequado")
+    else:
+        st.info("Soja - fixação biológica de N")
 
 # ---------------- 4️⃣ PDF RELATÓRIO ----------------
 def gerar_pdf():
@@ -186,12 +290,22 @@ def gerar_pdf():
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(190, 7, fix_txt(f" Status Solo: pH ({ph_solo}) | Alumínio ({al_solo}) | Textura ({classe_txt})"), ln=True)
     
+    # 🔧 NOVO: Adiciona níveis de P e K no PDF
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(190, 6, fix_txt(f" Fósforo: {p_solo} mg/dm³ ({nivel_p}) | Potássio: {k_solo} cmolc/dm³ ({nivel_k})"), ln=True)
+    
     # Prescrição Técnica
     pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Helvetica", "B", 11)
     pdf.cell(190, 8, fix_txt(" 2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(190, 7, fix_txt(f" Calagem: {nc:.2f} t/ha (Total para a área: {total_calc:.2f} t)"), ln=True)
     pdf.cell(190, 7, fix_txt(f" Gessagem: {ng:.2f} t/ha (Total para a área: {total_gesso:.2f} t)"), ln=True)
+    
+    # 🔧 NOVO: Observação se gessagem foi reduzida
+    if ng_base > ng:
+        pdf.set_text_color(255, 0, 0)
+        pdf.cell(190, 5, fix_txt(f"  *Observação: Dose original calculada de {ng_base:.2f} t/ha foi ajustada para segurança."), ln=True)
+        pdf.set_text_color(0, 0, 0)
     
     if cultura == "Milho":
         pdf.set_font("Helvetica", "B", 10)
@@ -208,14 +322,45 @@ def gerar_pdf():
     
     pdf.cell(190, 7, fix_txt(f" Adubação Sugerida: {d_final_pdf:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
     pdf.cell(190, 7, fix_txt(f" Necessidade de Compra: {t_sacos_pdf} sacos (50kg) para a área total."), ln=True)
+    
+    # 🔧 NOVO: Tabela de recomendação de P e K
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 6, fix_txt(" Recomendação de Nutrientes:"), ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(95, 5, fix_txt(f" P₂O₅ recomendado: {rec_p:.0f} kg/ha"), ln=False)
+    pdf.cell(95, 5, fix_txt(f" K₂O recomendado: {rec_k:.0f} kg/ha"), ln=True)
+
+    # 🔧 NOVO: Checklist de segurança no PDF
+    pdf.ln(5)
+    pdf.set_fill_color(255, 235, 200)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 7, fix_txt(" CHECKLIST DE SEGURANÇA PARA APLICAÇÃO"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 9)
+    
+    if cultura == "Milho":
+        if n_cobertura > 120:
+            pdf.cell(190, 5, fix_txt(" ⚠️ Nitrogênio em cobertura elevado - parcelar em V4 e V6"), ln=True)
+        else:
+            pdf.cell(190, 5, fix_txt(" ✅ Nitrogênio em cobertura dentro do recomendado"), ln=True)
+    
+    if ng > 2.0:
+        pdf.cell(190, 5, fix_txt(" ⚠️ Gessagem elevada - risco de lixiviação de K e Mg"), ln=True)
+    elif ng > 0:
+        pdf.cell(190, 5, fix_txt(" ✅ Gessagem dentro da faixa segura"), ln=True)
+    
+    if nc > 3.0:
+        pdf.cell(190, 5, fix_txt(" ⚠️ Calagem alta - aplicar com antecedência mínima de 90 dias"), ln=True)
+    elif nc > 0:
+        pdf.cell(190, 5, fix_txt(" ✅ Calagem dentro do recomendado"), ln=True)
 
     # Nota de Responsabilidade
-    pdf.ln(10); pdf.set_fill_color(255, 235, 235); pdf.set_font("Helvetica", "B", 9)
+    pdf.ln(5); pdf.set_fill_color(255, 235, 235); pdf.set_font("Helvetica", "B", 9)
     pdf.cell(190, 7, fix_txt(" NOTA DE RESPONSABILIDADE TÉCNICA"), ln=True, fill=True)
     pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(100, 0, 0)
     pdf.multi_cell(190, 4, fix_txt("Esta recomendação baseia-se exclusivamente nos dados fornecidos pelo usuário. O sucesso da cultura depende de fatores climáticos, fitossanitários e do manejo correto no campo."))
 
-    # Fontes (LÓGICA ALTERADA AQUI)
+    # Fontes
     pdf.ln(5); pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(34, 139, 34)
     pdf.cell(190, 8, fix_txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
     pdf.set_font("Helvetica", "I", 9); pdf.set_text_color(50, 50, 50)
@@ -230,8 +375,8 @@ def gerar_pdf():
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
-st.warning("⚠️ **Aviso:** Esta ferramenta é um auxílio à decisão.")
-if st.button("📄 GERAR RELATÓRIO"):
+st.warning("⚠️ **Aviso:** Esta ferramenta é um auxílio à decisão. Sempre consulte um engenheiro agrônomo antes da aplicação.")
+if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
     pdf_bytes = gerar_pdf()
     st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{nome_para_arquivo}.pdf")
 
