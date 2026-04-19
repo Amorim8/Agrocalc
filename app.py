@@ -131,11 +131,11 @@ if ng_base > 0:
     if sat_al > 20:
         ng = min(ng_base, 2.0)
         if ng_base > 2.0:
-            st.warning(f"⚠️ ATENCAO - Gessagem reduzida para seguranca: O calculo original indicava {ng_base:.2f} t/ha, mas devido a alta saturacao de aluminio ({sat_al:.1f}%), a dose foi limitada a 2.0 t/ha para evitar lixiviacao de nutrientes.")
+            st.warning(f"⚠️ ATENÇÃO - Gessagem reduzida para segurança: O cálculo original indicava {ng_base:.2f} t/ha, mas devido à alta saturação de alumínio ({sat_al:.1f}%), a dose foi limitada a 2.0 t/ha para evitar lixiviação de nutrientes.")
     
     if ca_solo > 3.0:
         ng = min(ng, 1.5)
-        st.info(f"ℹ️ Gessagem ajustada: Solo com bom teor de calcio ({ca_solo:.1f} cmolc/dm³). Dose reduzida para {ng:.2f} t/ha para evitar excesso.")
+        st.info(f"ℹ️ Gessagem ajustada: Solo com bom teor de cálcio ({ca_solo:.1f} cmolc/dm³). Dose reduzida para {ng:.2f} t/ha para evitar excesso.")
 
 total_gesso = ng * area
 
@@ -147,11 +147,11 @@ if cultura == "Soja":
     
     if nivel_p == "Bom":
         rec_p = rec_p * 0.5
-        st.info(f"ℹ️ Fosforo reduzido: Nivel atual de P e BOM ({p_solo} mg/dm³). Recomendacao ajustada para {rec_p:.0f} kg/ha de P2O5.")
+        st.info(f"ℹ️ Fósforo reduzido: Nível atual de P é BOM ({p_solo} mg/dm³). Recomendação ajustada para {rec_p:.0f} kg/ha de P2O5.")
     
     if nivel_k == "Bom":
         rec_k = rec_k * 0.5
-        st.info(f"ℹ️ Potassio reduzido: Nivel atual de K e BOM ({k_solo} cmolc/dm³). Recomendacao ajustada para {rec_k:.0f} kg/ha de K2O.")
+        st.info(f"ℹ️ Potássio reduzido: Nível atual de K é BOM ({k_solo} cmolc/dm³). Recomendação ajustada para {rec_k:.0f} kg/ha de K2O.")
         
 else:
     rec_n = meta_ton * 22
@@ -162,11 +162,11 @@ else:
     
     if nivel_p == "Bom":
         rec_p = rec_p * 0.5
-        st.info(f"ℹ️ Fosforo reduzido: Nivel atual de P e BOM ({p_solo} mg/dm³). Recomendacao ajustada para {rec_p:.0f} kg/ha de P2O5.")
+        st.info(f"ℹ️ Fósforo reduzido: Nível atual de P é BOM ({p_solo} mg/dm³). Recomendação ajustada para {rec_p:.0f} kg/ha de P2O5.")
     
     if nivel_k == "Bom":
         rec_k = rec_k * 0.5
-        st.info(f"ℹ️ Potassio reduzido: Nivel atual de K e BOM ({k_solo} cmolc/dm³). Recomendacao ajustada para {rec_k:.0f} kg/ha de K2O.")
+        st.info(f"ℹ️ Potássio reduzido: Nível atual de K é BOM ({k_solo} cmolc/dm³). Recomendação ajustada para {rec_k:.0f} kg/ha de K2O.")
 
 # ---------------- 2️⃣ DASHBOARD ----------------
 st.divider()
@@ -191,7 +191,7 @@ with r2:
     st.metric("Dose (t/ha)", f"{ng:.2f}")
     st.write(f"Total: **{total_gesso:.2f} t**")
     if ng_base > ng:
-        st.caption(f"↪️ Calculo original: {ng_base:.2f} t/ha")
+        st.caption(f"↪️ Cálculo original: {ng_base:.2f} t/ha")
 with r3:
     if cultura == "Milho":
         nc1, nc2, nc3 = st.columns(3)
@@ -212,93 +212,119 @@ with r3:
         if cultura == "Milho" and f_n > 0:
             n_fornecido = (dose_final * f_n) / 100
             if n_fornecido > n_plantio * 1.1:
-                st.warning(f"⚠️ ATENCAO - NITROGENIO EXCESSIVO NO PLANTIO!\n\nO formulado {f_n}-{f_p}-{f_k} na dose de {dose_final:.0f} kg/ha fornece **{n_fornecido:.0f} kg/ha de N** no plantio, acima dos {n_plantio} kg/ha recomendados.\n\nSugestoes:\n• Reduza a dose do formulado e complemente com P/K separados\n• Troque para um formulado com menor teor de N (ex: 4-20-20)\n• Use ureia ou sulfato de amonio apenas em cobertura")
+                st.warning(f"⚠️ ATENÇÃO - NITROGÊNIO EXCESSIVO NO PLANTIO!\n\nO formulado {f_n}-{f_p}-{f_k} na dose de {dose_final:.0f} kg/ha fornece **{n_fornecido:.0f} kg/ha de N** no plantio, acima dos {n_plantio} kg/ha recomendados.\n\nSugestões:\n• Reduza a dose do formulado e complemente com P/K separados\n• Troque para um formulado com menor teor de N (ex: 4-20-20)\n• Use ureia ou sulfato de amônio apenas em cobertura")
             elif n_fornecido > n_plantio:
-                st.info(f"ℹ️ O formulado fornece {n_fornecido:.0f} kg/ha de N no plantio. Ajuste a adubacao de cobertura para {(rec_n - n_fornecido):.0f} kg/ha.")
+                st.info(f"ℹ️ O formulado fornece {n_fornecido:.0f} kg/ha de N no plantio. Ajuste a adubação de cobertura para {(rec_n - n_fornecido):.0f} kg/ha.")
         
         dose_max_recomendada = max(rec_p, rec_k) * 1.5 if (rec_p > 0 or rec_k > 0) else 500
         if dose_final > dose_max_recomendada and dose_max_recomendada > 0:
-            st.error(f"⚠️ Dose muito elevada! A dose calculada ({dose_final:.0f} kg/ha) esta muito acima do necessario. Verifique os teores de P e K no solo ou ajuste a formulacao.")
+            st.error(f"⚠️ Dose muito elevada! A dose calculada ({dose_final:.0f} kg/ha) está muito acima do necessário. Verifique os teores de P e K no solo ou ajuste a formulação.")
         
         st.success(f"Dose: {dose_final:.0f} kg/ha | Total: {total_sacos} sacos")
 
-# Checklist de seguranca (apenas texto, sem emojis)
+# Checklist de segurança
 st.divider()
-st.subheader("✅ Checklist de Seguranca para Aplicacao")
+st.subheader("✅ Checklist de Segurança para Aplicação")
 col_check1, col_check2, col_check3 = st.columns(3)
 
 with col_check1:
     st.markdown("**Calagem**")
     if nc > 5.0:
-        st.error("[ATENCAO] Dose de calcario muito alta - parcelar aplicacao")
+        st.error("[ATENÇÃO] Dose de calcário muito alta - parcelar aplicação")
     elif nc > 3.0:
-        st.warning("[CUIDADO] Dose alta - aplicar com antecedencia minima de 90 dias")
+        st.warning("[CUIDADO] Dose alta - aplicar com antecedência mínima de 90 dias")
     else:
         st.success("[OK] Dose dentro do recomendado")
 
 with col_check2:
     st.markdown("**Gessagem**")
     if ng > 2.0:
-        st.error("[ATENCAO] Gessagem elevada - risco de lixiviacao de K e Mg")
+        st.error("[ATENÇÃO] Gessagem elevada - risco de lixiviação de K e Mg")
     elif ng > 1.0:
         st.warning("[CUIDADO] Gessagem moderada - verificar necessidade de Ca e S")
     else:
         st.success("[OK] Dose segura")
 
 with col_check3:
-    st.markdown("**Nitrojenio (Milho)**")
     if cultura == "Milho":
+        st.markdown("**Nitrogênio (Milho)**")
         if n_cobertura > 120:
             st.warning("[CUIDADO] N em cobertura alto - parcelar em V4 e V6")
         else:
             st.success("[OK] N em cobertura adequado")
     else:
-        st.info("Soja - fixacao biologica de N")
+        st.markdown("**Nitrogênio (Soja)**")
+        st.info("Soja - fixação biológica de N (não necessita adubação nitrogenada)")
 
 # ---------------- 4️⃣ PDF RELATÓRIO ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
-    def fix_txt(t): return str(t).encode('latin-1', 'replace').decode('latin-1')
+    def fix_txt(t): 
+        # Mapeamento de acentos para funcionar no FPDF com latin-1
+        t = t.replace('ç', 'ç')
+        t = t.replace('ã', 'ã')
+        t = t.replace('õ', 'õ')
+        t = t.replace('á', 'á')
+        t = t.replace('é', 'é')
+        t = t.replace('í', 'í')
+        t = t.replace('ó', 'ó')
+        t = t.replace('ú', 'ú')
+        t = t.replace('â', 'â')
+        t = t.replace('ê', 'ê')
+        t = t.replace('ô', 'ô')
+        t = t.replace('à', 'à')
+        t = t.replace('ç'.upper(), 'Ç')
+        t = t.replace('ã'.upper(), 'Ã')
+        t = t.replace('õ'.upper(), 'Õ')
+        t = t.replace('á'.upper(), 'Á')
+        t = t.replace('é'.upper(), 'É')
+        t = t.replace('í'.upper(), 'Í')
+        t = t.replace('ó'.upper(), 'Ó')
+        t = t.replace('ú'.upper(), 'Ú')
+        t = t.replace('â'.upper(), 'Â')
+        t = t.replace('ê'.upper(), 'Ê')
+        t = t.replace('ô'.upper(), 'Ô')
+        return str(t).encode('latin-1', 'replace').decode('latin-1')
     
     data_pdf = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
     
-    # Cabecalho
+    # Cabeçalho
     pdf.set_fill_color(34, 139, 34); pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255); pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(190, 15, fix_txt("RELATORIO DE RECOMENDACAO TECNICA"), align="C", ln=True)
+    pdf.cell(190, 15, fix_txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
     pdf.set_font("Helvetica", "", 10); pdf.cell(190, 5, fix_txt(f"Consultor: Felipe Amorim | Data: {data_pdf}"), align="C", ln=True)
     
     # Dados Gerais
     pdf.set_text_color(0, 0, 0); pdf.ln(15); pdf.set_fill_color(230, 230, 230); pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(190, 8, fix_txt(" 1. INFORMACOES GERAIS E DIAGNOSTICO"), ln=True, fill=True)
+    pdf.cell(190, 8, fix_txt(" 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO"), ln=True, fill=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.cell(190, 7, fix_txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Nao informado'} | Fazenda: {fazenda}"), ln=True)
-    pdf.cell(190, 7, fix_txt(f" Cultura: {cultura} | Area: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Não informado'} | Fazenda: {fazenda}"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Cultura: {cultura} | Área: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 7, fix_txt(f" Status Solo: pH ({ph_solo}) | Aluminio ({al_solo}) | Textura ({classe_txt})"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Status Solo: pH ({ph_solo}) | Alumínio ({al_solo}) | Textura ({classe_txt})"), ln=True)
     
     pdf.set_font("Helvetica", "", 10)
-    pdf.cell(190, 6, fix_txt(f" Fosforo: {p_solo} mg/dm³ ({nivel_p}) | Potassio: {k_solo} cmolc/dm³ ({nivel_k})"), ln=True)
+    pdf.cell(190, 6, fix_txt(f" Fósforo: {p_solo} mg/dm³ ({nivel_p}) | Potássio: {k_solo} cmolc/dm³ ({nivel_k})"), ln=True)
     
-    # Prescricao Tecnica
+    # Prescrição Técnica
     pdf.ln(5); pdf.set_fill_color(230, 230, 230); pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(190, 8, fix_txt(" 2. PRESCRICAO TECNICA"), ln=True, fill=True)
+    pdf.cell(190, 8, fix_txt(" 2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.cell(190, 7, fix_txt(f" Calagem: {nc:.2f} t/ha (Total para a area: {total_calc:.2f} t)"), ln=True)
-    pdf.cell(190, 7, fix_txt(f" Gessagem: {ng:.2f} t/ha (Total para a area: {total_gesso:.2f} t)"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Calagem: {nc:.2f} t/ha (Total para a área: {total_calc:.2f} t)"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Gessagem: {ng:.2f} t/ha (Total para a área: {total_gesso:.2f} t)"), ln=True)
     
     if ng_base > ng:
         pdf.set_text_color(255, 0, 0)
-        pdf.cell(190, 5, fix_txt(f"  *Observacao: Dose original calculada de {ng_base:.2f} t/ha foi ajustada para seguranca."), ln=True)
+        pdf.cell(190, 5, fix_txt(f"  *Observação: Dose original calculada de {ng_base:.2f} t/ha foi ajustada para segurança."), ln=True)
         pdf.set_text_color(0, 0, 0)
     
     if cultura == "Milho":
         pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(190, 7, fix_txt(f" Recomendacao de Nitrogenio (N): Total {rec_n:.0f} kg/ha"), ln=True)
+        pdf.cell(190, 7, fix_txt(f" Recomendação de Nitrogênio (N): Total {rec_n:.0f} kg/ha"), ln=True)
         pdf.set_font("Helvetica", "", 10)
-        pdf.cell(190, 6, fix_txt(f"  - Aplicacao no Plantio: {n_plantio} kg/ha"), ln=True)
-        pdf.cell(190, 6, fix_txt(f"  - Aplicacao em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
+        pdf.cell(190, 6, fix_txt(f"  - Aplicação no Plantio: {n_plantio} kg/ha"), ln=True)
+        pdf.cell(190, 6, fix_txt(f"  - Aplicação em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
     
     pdf.set_font("Helvetica", "B", 10); pdf.ln(2)
     d_p = (rec_p / f_p * 100) if f_p > 0 else 0
@@ -306,61 +332,63 @@ def gerar_pdf():
     d_final_pdf = max(d_p, d_k)
     t_sacos_pdf = math.ceil((d_final_pdf * area) / 50)
     
-    pdf.cell(190, 7, fix_txt(f" Adubacao Sugerida: {d_final_pdf:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
-    pdf.cell(190, 7, fix_txt(f" Necessidade de Compra: {t_sacos_pdf} sacos (50kg) para a area total."), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Adubação Sugerida: {d_final_pdf:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Necessidade de Compra: {t_sacos_pdf} sacos (50kg) para a área total."), ln=True)
     
-    # Recomendacao de nutrientes
+    # Recomendação de nutrientes
     pdf.ln(3)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 6, fix_txt(" Recomendacao de Nutrientes:"), ln=True)
+    pdf.cell(190, 6, fix_txt(" Recomendação de Nutrientes:"), ln=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.cell(95, 5, fix_txt(f" P2O5 recomendado: {rec_p:.0f} kg/ha"), ln=False)
-    pdf.cell(95, 5, fix_txt(f" K2O recomendado: {rec_k:.0f} kg/ha"), ln=True)
+    pdf.cell(95, 5, fix_txt(f" P₂O₅ recomendado: {rec_p:.0f} kg/ha"), ln=False)
+    pdf.cell(95, 5, fix_txt(f" K₂O recomendado: {rec_k:.0f} kg/ha"), ln=True)
 
-    # Checklist de seguranca no PDF (sem emojis, usando texto simples)
+    # Checklist de segurança no PDF
     pdf.ln(5)
     pdf.set_fill_color(255, 235, 200)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 7, fix_txt(" CHECKLIST DE SEGURANCA PARA APLICACAO"), ln=True, fill=True)
+    pdf.cell(190, 7, fix_txt(" CHECKLIST DE SEGURANÇA PARA APLICAÇÃO"), ln=True, fill=True)
     pdf.set_font("Helvetica", "", 9)
     
     if cultura == "Milho":
         if n_cobertura > 120:
-            pdf.cell(190, 5, fix_txt(" [CUIDADO] Nitrogenio em cobertura elevado - parcelar em V4 e V6"), ln=True)
+            pdf.cell(190, 5, fix_txt(" [CUIDADO] Nitrogênio em cobertura elevado - parcelar em V4 e V6"), ln=True)
         else:
-            pdf.cell(190, 5, fix_txt(" [OK] Nitrogenio em cobertura dentro do recomendado"), ln=True)
+            pdf.cell(190, 5, fix_txt(" [OK] Nitrogênio em cobertura dentro do recomendado"), ln=True)
+    else:
+        pdf.cell(190, 5, fix_txt(" [INFO] Soja - fixação biológica de N (não necessita adubação nitrogenada)"), ln=True)
     
     if ng > 2.0:
-        pdf.cell(190, 5, fix_txt(" [ATENCAO] Gessagem elevada - risco de lixiviacao de K e Mg"), ln=True)
+        pdf.cell(190, 5, fix_txt(" [ATENÇÃO] Gessagem elevada - risco de lixiviação de K e Mg"), ln=True)
     elif ng > 0:
         pdf.cell(190, 5, fix_txt(" [OK] Gessagem dentro da faixa segura"), ln=True)
     
     if nc > 3.0:
-        pdf.cell(190, 5, fix_txt(" [CUIDADO] Calagem alta - aplicar com antecedencia minima de 90 dias"), ln=True)
+        pdf.cell(190, 5, fix_txt(" [CUIDADO] Calagem alta - aplicar com antecedência mínima de 90 dias"), ln=True)
     elif nc > 0:
         pdf.cell(190, 5, fix_txt(" [OK] Calagem dentro do recomendado"), ln=True)
     
-    # Verificacao adicional para P e K altos
+    # Verificação adicional para P e K altos
     if nivel_p == "Bom" and rec_p > 0:
-        pdf.cell(190, 5, fix_txt(" [INFO] Fosforo no solo ja esta BOM - adubacao reduzida pela metade"), ln=True)
+        pdf.cell(190, 5, fix_txt(" [INFO] Fósforo no solo já está BOM - adubação reduzida pela metade"), ln=True)
     if nivel_k == "Bom" and rec_k > 0:
-        pdf.cell(190, 5, fix_txt(" [INFO] Potassio no solo ja esta BOM - adubacao reduzida pela metade"), ln=True)
+        pdf.cell(190, 5, fix_txt(" [INFO] Potássio no solo já está BOM - adubação reduzida pela metade"), ln=True)
 
     # Nota de Responsabilidade
     pdf.ln(5); pdf.set_fill_color(255, 235, 235); pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(190, 7, fix_txt(" NOTA DE RESPONSABILIDADE TECNICA"), ln=True, fill=True)
+    pdf.cell(190, 7, fix_txt(" NOTA DE RESPONSABILIDADE TÉCNICA"), ln=True, fill=True)
     pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(100, 0, 0)
-    pdf.multi_cell(190, 4, fix_txt("Esta recomendacao baseia-se exclusivamente nos dados fornecidos pelo usuario. O sucesso da cultura depende de fatores climaticos, fitossanitarios e do manejo correto no campo."))
+    pdf.multi_cell(190, 4, fix_txt("Esta recomendação baseia-se exclusivamente nos dados fornecidos pelo usuário. O sucesso da cultura depende de fatores climáticos, fitossanitários e do manejo correto no campo."))
 
     # Fontes
     pdf.ln(5); pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(34, 139, 34)
-    pdf.cell(190, 8, fix_txt("FONTES E REFERENCIAS TECNICAS:"), ln=True)
+    pdf.cell(190, 8, fix_txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
     pdf.set_font("Helvetica", "I", 9); pdf.set_text_color(50, 50, 50)
     
     if cultura == "Soja":
-        ref_texto = "- Interpretacao de Solo: Embrapa Soja.\n- Exportacao e Extracao: Manual de Adubacao e Calagem para o Estado do Parana (SBCS).\n- Calagem: Metodo da Elevacao da Saturaco por Bases (V%)."
+        ref_texto = "- Interpretação de Solo: Embrapa Soja.\n- Exportação e Extração: Manual de Adubação e Calagem para o Estado do Paraná (SBCS).\n- Calagem: Método da Elevação da Saturação por Bases (V%)."
     else:
-        ref_texto = "- Interpretacao de Solo: Embrapa Milho e Sorgo.\n- Exportacao e Extracao: IPNI Brasil.\n- Calagem: Metodo da Elevacao da Saturaco por Bases (V%)."
+        ref_texto = "- Interpretação de Solo: Embrapa Milho e Sorgo.\n- Exportação e Extração: IPNI Brasil.\n- Calagem: Método da Elevação da Saturação por Bases (V%)."
         
     pdf.multi_cell(190, 5, fix_txt(ref_texto))
     
