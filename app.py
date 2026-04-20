@@ -57,6 +57,9 @@ st.markdown("""
     div[data-testid="stError"] {
         border-left-color: #dc3545;
     }
+    div[data-testid="stInfo"] {
+        border-left-color: #17a2b8;
+    }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
@@ -177,6 +180,71 @@ m3.metric("Status P", nivel_p)
 m4.metric("Status K", nivel_k)
 m5.metric("Alumínio (m%)", f"{m_atual:.1f}%")
 
+# ---------------- FUNÇÃO PARA SUGERIR FONTES CONCENTRADAS ----------------
+def sugerir_fontes_concentradas(rec_p, rec_k, rec_n_plantio, area):
+    """Sugere fontes comerciais concentradas para economizar"""
+    
+    # MAP (52% P2O5, 10% N) - Fonte de Fósforo
+    map_kg = rec_p / 0.52 if rec_p > 0 else 0
+    n_do_map = map_kg * 0.10
+    
+    # KCl (60% K2O) - Fonte de Potássio
+    kcl_kg = rec_k / 0.60 if rec_k > 0 else 0
+    
+    # Ureia (45% N) - Complemento de Nitrogênio no plantio
+    n_faltante = max(0, rec_n_plantio - n_do_map)
+    ureia_plantio_kg = n_faltante / 0.45 if n_faltante > 0 else 0
+    
+    # Superfosfato Simples (18% P2O5, 10% S) - Opção alternativa para P
+    sss_kg = rec_p / 0.18 if rec_p > 0 else 0
+    
+    # Yurin (20% N, 20% K2O) - Opção alternativa para N+K
+    yurin_kg = rec_k / 0.20 if rec_k > 0 else 0
+    n_do_yurin = yurin_kg * 0.20
+    
+    return {
+        "MAP": map_kg,
+        "KCl": kcl_kg,
+        "Ureia_plantio": ureia_plantio_kg,
+        "SSS": sss_kg,
+        "Yurin": yurin_kg,
+        "n_do_yurin": n_do_yurin
+    }
+
+# ---------------- FUNÇÃO PARA VALIDAR PRATICIDADE ----------------
+def validar_praticidade_recomendacao(dose_final, f_n, f_p, f_k, rec_p, rec_k, n_plantio, area, cultura):
+    """Valida se a recomendação é praticável e alerta sobre problemas"""
+    
+    problemas = []
+    sugestoes = []
+    alerta_salinidade = False
+    
+    DOSE_MAX = 800
+    
+    # 1. Limite de dose máxima
+    if dose_final > DOSE_MAX:
+        problemas.append(f"Dose muito alta ({dose_final:.0f} kg/ha) - acima do limite prático de {DOSE_MAX} kg/ha")
+        sugestoes.append("Use fontes concentradas (MAP, KCl, Superfosfato Triplo) em vez de formulados")
+    
+    # 2. Salinidade do K no plantio (apenas para milho)
+    if cultura == "Milho" and f_k > 0:
+        k2o_no_plantio = dose_final * (f_k / 100)
+        if k2o_no_plantio > 80:
+            alerta_salinidade = True
+            problemas.append(f"K2O no plantio ({k2o_no_plantio:.0f} kg/ha) acima do seguro (80 kg/ha) - risco de salinidade")
+            sugestoes.append(f"Parceler o K: aplique 80 kg/ha no plantio e {rec_k - 80:.0f} kg/ha em cobertura via KCl")
+    
+    # 3. Verifica se o formulado tem boa relação P:K
+    if f_p > 0 and f_k > 0 and rec_k > 0:
+        relacao_pk = f_p / f_k
+        relacao_necessaria = rec_p / rec_k
+        
+        if abs(relacao_pk - relacao_necessaria) > 0.5:
+            problemas.append(f"Relação P:K do formulado ({f_p}:{f_k}) não atende a necessidade ({rec_p:.0f}:{rec_k:.0f})")
+            sugestoes.append("Use fontes separadas (MAP para P, KCl para K) para maior flexibilidade")
+    
+    return problemas, sugestoes, alerta_salinidade
+
 # ---------------- 3️⃣ PRESCRIÇÃO E ADUBO ----------------
 st.write("---")
 st.subheader("3️⃣ Planejamento de Fertilizantes e Corretivos")
@@ -198,28 +266,104 @@ with r3:
         nc2.metric("Plantio", f"{n_plantio} kg")
         nc3.metric("Cobertura", f"{n_cobertura:.0f} kg")
     st.markdown("### 🛒 Formulação Comercial")
+    st.caption("Digite a formulação do adubo que o cliente pretende usar (ex: 10-10-10, 04-14-08, 08-28-16)")
     cn, cp, ck = st.columns(3)
     f_n = cn.number_input("N%", 0, value=0 if cultura=="Soja" else 4)
     f_p = cp.number_input("P%", 0, value=20)
     f_k = ck.number_input("K%", 0, value=20)
+    
     if f_p > 0 or f_k > 0:
         dose_p = (rec_p / f_p * 100) if f_p > 0 else 0
         dose_k = (rec_k / f_k * 100) if f_k > 0 else 0
         dose_final = max(dose_p, dose_k)
         total_sacos = math.ceil((dose_final * area) / 50)
         
+        # VALIDAÇÕES DE PRATICIDADE
+        problemas, sugestoes, alerta_salinidade = validar_praticidade_recomendacao(
+            dose_final, f_n, f_p, f_k, rec_p, rec_k, n_plantio, area, cultura
+        )
+        
+        # Exibe alertas se houver problemas
+        if problemas:
+            st.error("⚠️ **ATENÇÃO - FORMULAÇÃO INADEQUADA!**")
+            for problema in problemas:
+                st.write(f"- {problema}")
+            
+            st.markdown("---")
+            st.markdown("### 🔧 SUGESTÕES PARA ECONOMIZAR:")
+            for sugestao in sugestoes:
+                st.info(f"💡 {sugestao}")
+            
+            # Sugere fontes concentradas
+            st.markdown("---")
+            st.markdown("### 📊 OPÇÕES MAIS ECONÔMICAS E SEGURAS:")
+            
+            fontes = sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, area)
+            
+            col_op1, col_op2, col_op3 = st.columns(3)
+            
+            with col_op1:
+                st.markdown("**Opção 1: MAP + KCl + Ureia**")
+                if fontes["MAP"] > 0:
+                    st.write(f"📦 MAP: **{fontes['MAP']:.0f} kg/ha** ({math.ceil(fontes['MAP'] * area / 50)} sacos)")
+                if fontes["KCl"] > 0:
+                    st.write(f"📦 KCl: **{fontes['KCl']:.0f} kg/ha** ({math.ceil(fontes['KCl'] * area / 50)} sacos)")
+                if fontes["Ureia_plantio"] > 0:
+                    st.write(f"📦 Ureia plantio: **{fontes['Ureia_plantio']:.0f} kg/ha** ({math.ceil(fontes['Ureia_plantio'] * area / 50)} sacos)")
+                total_sacos_op1 = math.ceil((fontes["MAP"] + fontes["KCl"] + fontes["Ureia_plantio"]) * area / 50)
+                st.success(f"💰 Total: **{total_sacos_op1} sacos** (área {area:.0f} ha)")
+            
+            with col_op2:
+                st.markdown("**Opção 2: Formulado 04-20-20**")
+                dose_04_20_20 = max(rec_p / 0.20, rec_k / 0.20) if rec_p > 0 or rec_k > 0 else 0
+                sacos_04_20_20 = math.ceil(dose_04_20_20 * area / 50)
+                st.write(f"📦 Dose: **{dose_04_20_20:.0f} kg/ha**")
+                st.success(f"💰 Total: **{sacos_04_20_20} sacos**")
+                if cultura == "Milho" and n_plantio > 0:
+                    n_fornecido_04 = dose_04_20_20 * 0.04
+                    st.caption(f"ℹ️ Fornece {n_fornecido_04:.0f} kg/ha de N no plantio")
+            
+            with col_op3:
+                st.markdown("**Opção 3: Formulado 00-20-20 + Ureia**")
+                dose_00_20_20 = rec_k / 0.20 if rec_k > 0 else 0
+                ureia_extra = max(0, n_plantio - (dose_00_20_20 * 0)) / 0.45
+                sacos_00_20_20 = math.ceil(dose_00_20_20 * area / 50)
+                sacos_ureia_extra = math.ceil(ureia_extra * area / 50)
+                st.write(f"📦 00-20-20: **{dose_00_20_20:.0f} kg/ha** ({sacos_00_20_20} sacos)")
+                if ureia_extra > 0:
+                    st.write(f"📦 Ureia: **{ureia_extra:.0f} kg/ha** ({sacos_ureia_extra} sacos)")
+                st.success(f"💰 Total: **{sacos_00_20_20 + sacos_ureia_extra} sacos**")
+        
+        # Alerta de salinidade específico
+        if alerta_salinidade:
+            st.warning("""
+            ⚠️ **RISCO DE SALINIDADE NO PLANTIO!**
+            
+            O potássio aplicado em excesso no sulco pode queimar as sementes e reduzir o estande.
+            
+            **Recomendação:** Aplique no máximo 80 kg/ha de K2O no plantio. O restante deve ser aplicado em cobertura.
+            """)
+        
+        # Exibe a recomendação original (sempre aparece)
+        st.markdown("---")
+        st.markdown("### 📋 RECOMENDAÇÃO ORIGINAL (conforme formulado escolhido)")
+        
         if cultura == "Milho" and f_n > 0:
             n_fornecido = (dose_final * f_n) / 100
             if n_fornecido > n_plantio * 1.1:
-                st.warning(f"⚠️ ATENÇÃO - NITROGÊNIO EXCESSIVO NO PLANTIO!\n\nO formulado {f_n}-{f_p}-{f_k} na dose de {dose_final:.0f} kg/ha fornece **{n_fornecido:.0f} kg/ha de N** no plantio, acima dos {n_plantio} kg/ha recomendados.\n\nSugestões:\n• Reduza a dose do formulado e complemente com P/K separados\n• Troque para um formulado com menor teor de N (ex: 4-20-20)\n• Use ureia ou sulfato de amônio apenas em cobertura")
+                st.warning(f"⚠️ O formulado {f_n}-{f_p}-{f_k} fornece **{n_fornecido:.0f} kg/ha de N** no plantio, acima dos {n_plantio} kg/ha recomendados.")
             elif n_fornecido > n_plantio:
                 st.info(f"ℹ️ O formulado fornece {n_fornecido:.0f} kg/ha de N no plantio. Ajuste a adubação de cobertura para {(rec_n - n_fornecido):.0f} kg/ha.")
         
-        dose_max_recomendada = max(rec_p, rec_k) * 1.5 if (rec_p > 0 or rec_k > 0) else 500
-        if dose_final > dose_max_recomendada and dose_max_recomendada > 0:
-            st.error(f"⚠️ Dose muito elevada! A dose calculada ({dose_final:.0f} kg/ha) está muito acima do necessário. Verifique os teores de P e K no solo ou ajuste a formulação.")
+        st.success(f"**Dose:** {dose_final:.0f} kg/ha | **Total:** {total_sacos} sacos de 50kg para a área total")
         
-        st.success(f"Dose: {dose_final:.0f} kg/ha | Total: {total_sacos} sacos")
+        # Mostra quanto de cada nutriente o formulado fornece
+        st.caption(f"""
+        📊 **O que o formulado fornece:**
+        - N: {dose_final * f_n / 100:.0f} kg/ha
+        - P2O5: {dose_final * f_p / 100:.0f} kg/ha
+        - K2O: {dose_final * f_k / 100:.0f} kg/ha
+        """)
 
 # Checklist de segurança
 st.divider()
@@ -260,7 +404,6 @@ def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     def fix_txt(t): 
-        # Mapeamento de acentos para funcionar no FPDF com latin-1
         t = t.replace('ç', 'ç')
         t = t.replace('ã', 'ã')
         t = t.replace('õ', 'õ')
@@ -343,14 +486,41 @@ def gerar_pdf():
     pdf.cell(190, 7, fix_txt(f" Adubação Sugerida: {d_final_pdf:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
     pdf.cell(190, 7, fix_txt(f" Necessidade de Compra: {t_sacos_pdf} sacos (50kg) para a área total."), ln=True)
     
-    # Recomendação de nutrientes (sem subscritos para evitar pontos de interrogação)
+    # Recomendação de nutrientes
     pdf.ln(3)
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(190, 6, fix_txt(" Recomendação de Nutrientes:"), ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(95, 5, fix_txt(f" P2O5 recomendado: {rec_p:.0f} kg/ha"), ln=False)
     pdf.cell(95, 5, fix_txt(f" K2O recomendado: {rec_k:.0f} kg/ha"), ln=True)
-
+    
+    # Sugestão de fontes concentradas no PDF
+    fontes = sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, area)
+    
+    pdf.ln(5)
+    pdf.set_fill_color(200, 230, 200)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 7, fix_txt(" SUGESTÃO DE FONTES CONCENTRADAS (MAIS ECONÔMICAS)"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 9)
+    
+    if fontes["MAP"] > 0 or fontes["KCl"] > 0:
+        pdf.cell(190, 5, fix_txt(" Opção 1: MAP + KCl + Ureia"), ln=True)
+        if fontes["MAP"] > 0:
+            pdf.cell(190, 4, fix_txt(f"  - MAP (52% P2O5, 10% N): {fontes['MAP']:.0f} kg/ha ({math.ceil(fontes['MAP'] * area / 50)} sacos)"), ln=True)
+        if fontes["KCl"] > 0:
+            pdf.cell(190, 4, fix_txt(f"  - KCl (60% K2O): {fontes['KCl']:.0f} kg/ha ({math.ceil(fontes['KCl'] * area / 50)} sacos)"), ln=True)
+        if fontes["Ureia_plantio"] > 0:
+            pdf.cell(190, 4, fix_txt(f"  - Ureia plantio (45% N): {fontes['Ureia_plantio']:.0f} kg/ha ({math.ceil(fontes['Ureia_plantio'] * area / 50)} sacos)"), ln=True)
+        
+        total_sacos_op1 = math.ceil((fontes["MAP"] + fontes["KCl"] + fontes["Ureia_plantio"]) * area / 50)
+        pdf.cell(190, 4, fix_txt(f"  Total de sacos: {total_sacos_op1} sacos"), ln=True)
+    
+    pdf.ln(3)
+    pdf.cell(190, 5, fix_txt(" Opção 2: Formulado 04-20-20"), ln=True)
+    dose_04_20_20 = max(rec_p / 0.20, rec_k / 0.20) if rec_p > 0 or rec_k > 0 else 0
+    sacos_04_20_20 = math.ceil(dose_04_20_20 * area / 50)
+    pdf.cell(190, 4, fix_txt(f"  - Dose: {dose_04_20_20:.0f} kg/ha | Total: {sacos_04_20_20} sacos"), ln=True)
+    
     # Checklist de segurança no PDF
     pdf.ln(5)
     pdf.set_fill_color(255, 235, 200)
@@ -376,7 +546,6 @@ def gerar_pdf():
     elif nc > 0:
         pdf.cell(190, 5, fix_txt(" [OK] Calagem dentro do recomendado"), ln=True)
     
-    # Verificação adicional para P e K altos
     if nivel_p == "Bom" and rec_p > 0:
         pdf.cell(190, 5, fix_txt(" [INFO] Fósforo no solo já está BOM - adubação reduzida pela metade"), ln=True)
     if nivel_k == "Bom" and rec_k > 0:
