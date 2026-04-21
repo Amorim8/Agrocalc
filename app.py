@@ -5,15 +5,17 @@ from datetime import datetime, timedelta
 
 # ---------------- CONFIGURAÇÕES INICIAIS ----------------
 SENHA_MESTRE = "@Lipe1928"
+
+# Ajuste de Fuso Horário (Brasília -3h em relação ao UTC)
 data_hoje = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
 
-# ---------------- LOGIN ----------------
+# ---------------- SISTEMA DE ACESSO (SENHA) ----------------
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
 
 if not st.session_state['autenticado']:
     st.markdown("<h2 style='text-align: center;'>🔐 Acesso Restrito</h2>", unsafe_allow_html=True)
-    senha = st.text_input("Digite a senha:", type="password")
+    senha = st.text_input("Digite a senha para acessar o sistema:", type="password")
     if st.button("Entrar"):
         if senha == SENHA_MESTRE:
             st.session_state['autenticado'] = True
@@ -22,496 +24,563 @@ if not st.session_state['autenticado']:
             st.error("Senha incorreta!")
     st.stop()
 
-# ---------------- CONFIG VISUAL ----------------
+# ---------------- CONFIG E ESTILO DARK PREMIUM ----------------
 st.set_page_config(page_title="Felipe Amorim | Consultoria", layout="wide", page_icon="🌿")
 
 st.markdown("""
-<style>
-.main { background-color: #0e1117; }
-div[data-testid="stMetric"] {
-    background: linear-gradient(145deg, #1f2937, #111827) !important;
-    border: 1px solid #374151;
-    padding: 18px;
-    border-radius: 12px;
-    border-left: 6px solid #22c55e !important;
-}
-div[data-testid="stMetric"] label { color: #9ca3af !important; }
-div[data-testid="stMetric"] div { color: #f9fafb !important; font-size: 26px; font-weight: bold; }
-.stButton>button {
-    background-color: #28a745 !important;
-    color: white !important;
-    font-weight: bold;
-    width: 100%;
-}
-.warning-box {
-    background-color: #332701;
-    border-left: 5px solid #ffc107;
-    padding: 10px;
-    border-radius: 8px;
-    margin: 10px 0;
-}
-.success-box {
-    background-color: #052e16;
-    border-left: 5px solid #22c55e;
-    padding: 10px;
-    border-radius: 8px;
-    margin: 10px 0;
-}
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-</style>
-""", unsafe_allow_html=True)
+    <style>
+    .main { background-color: #0e1117; }
+    div[data-testid="stMetric"] {
+        background-color: #1a1c23 !important;
+        border: 1px solid #2e3139;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #28a745 !important;
+    }
+    div[data-testid="stMetric"] label, div[data-testid="stMetric"] div {
+        color: #ffffff !important;
+    }
+    .stButton>button {
+        background-color: #28a745 !important;
+        color: white !important;
+        font-weight: bold;
+        width: 100%;
+        height: 3em;
+    }
+    .stAlert {
+        border-radius: 10px;
+        border-left: 5px solid;
+    }
+    div[data-testid="stWarning"] {
+        border-left-color: #ffc107;
+    }
+    div[data-testid="stError"] {
+        border-left-color: #dc3545;
+    }
+    div[data-testid="stInfo"] {
+        border-left-color: #17a2b8;
+    }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
 
-# ---------------- FUNÇÕES AUXILIARES ----------------
-def remover_acentos(texto):
-    """Remove acentos para o PDF"""
-    import unicodedata
-    return unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('ASCII')
-
-def sugerir_ajustes(cultura, dose_ha, fn, fp, fk, n_necessario, p_necessario, k_necessario):
-    """Sugere fontes específicas para completar ou reduzir nutrientes"""
-    
-    # Calcula o que o adubo fornece
-    n_fornecido = dose_ha * (fn / 100)
-    p_fornecido = dose_ha * (fp / 100)
-    k_fornecido = dose_ha * (fk / 100)
-    
-    # Calcula saldos
-    saldo_n = n_fornecido - n_necessario
-    saldo_p = p_fornecido - p_necessario
-    saldo_k = k_fornecido - k_necessario
-    
-    sugestoes = []
-    fontes = {}
-    
-    # Ajustes para N
-    if saldo_n < -1:  # tolerância de 1 kg/ha
-        falta_n = abs(saldo_n)
-        ureia = falta_n / 0.45
-        sulfato = falta_n / 0.20
-        nitrato = falta_n / 0.15
-        sugestoes.append(f"⚠️ **NITROGÊNIO**: faltam {falta_n:.1f} kg/ha")
-        fontes['n'] = {
-            'falta': falta_n,
-            'ureia': ureia,
-            'sulfato_amonio': sulfato,
-            'nitrato_calcio': nitrato
-        }
-    elif saldo_n > 5:
-        sugestoes.append(f"⚠️ **NITROGÊNIO**: excesso de {saldo_n:.1f} kg/ha → reduzir dose ou usar fórmula com menos N")
-    
-    # Ajustes para P (fósforo)
-    if saldo_p < -1:
-        falta_p = abs(saldo_p)
-        map = falta_p / 0.48  # MAP tem 48% P₂O₅
-        super_simples = falta_p / 0.18
-        super_triplo = falta_p / 0.41
-        sugestoes.append(f"⚠️ **FÓSFORO**: faltam {falta_p:.1f} kg/ha")
-        fontes['p'] = {
-            'falta': falta_p,
-            'map': map,
-            'super_simples': super_simples,
-            'super_triplo': super_triplo
-        }
-    elif saldo_p > 20:
-        sugestoes.append(f"⚠️ **FÓSFORO**: excesso de {saldo_p:.1f} kg/ha → usar fórmula com menos P ou reduzir dose")
-    
-    # Ajustes para K (potássio)
-    if saldo_k < -1:
-        falta_k = abs(saldo_k)
-        kcl = falta_k / 0.60  # KCl tem 60% K₂O
-        k2so4 = falta_k / 0.50  # Sulfato de Potássio tem 50% K₂O
-        sugestoes.append(f"⚠️ **POTÁSSIO**: faltam {falta_k:.1f} kg/ha")
-        fontes['k'] = {
-            'falta': falta_k,
-            'kcl': kcl,
-            'k2so4': k2so4
-        }
-    elif saldo_k > 20:
-        sugestoes.append(f"⚠️ **POTÁSSIO**: excesso de {saldo_k:.1f} kg/ha → usar fórmula com menos K ou reduzir dose")
-    
-    return sugestoes, fontes, n_fornecido, p_fornecido, k_fornecido, saldo_n, saldo_p, saldo_k
-
-# ---------------- SIDEBAR (ENTRADAS) ----------------
+# ---------------- SIDEBAR ----------------
 with st.sidebar:
-    st.title("🌿 Configurações")
-    nome_cliente_input = st.text_input("👨‍🌾 Nome do Cliente:")
-    fazenda = st.text_input("🏠 Fazenda:")
-    municipio = st.text_input("🏙️ Município:")
-    estado = st.selectbox("🌎 Estado:", ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"])
+    st.markdown("<h1 style='text-align: center;'>🌿</h1>", unsafe_allow_html=True)
+    st.title("Configurações")
+    nome_cliente_input = st.text_input("👨‍🌾 Nome do Cliente:", "")
+    fazenda = st.text_input("🏠 Fazenda:", "")
+    talhao = st.text_input("📍 Talhão:", "")
+    municipio = st.text_input("🏙️ Município:", "")
+    estado = st.selectbox("🌎 Estado:", ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"])
     
     st.divider()
-    area = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.1, format="%.2f")
-    cultura = st.radio("🌱 Cultura:", ["Soja", "Milho", "Palma"], horizontal=True)
-
-    variedade = ""
-    if cultura == "Palma":
-        variedade = st.selectbox("🌵 Variedade:", ["Miúda", "Orelha de Elefante"])
+    area = st.number_input("📏 Área Total (ha):", min_value=0.01, value=1.0, step=0.01, format="%.2f")
+    cultura = st.radio("🌱 Cultura:", ["Soja", "Milho"], horizontal=True)
     
-    # Meta ajustada por cultura
-    if cultura == "Soja":
-        default_meta = 4.0
-    elif cultura == "Milho":
-        default_meta = 6.0
-    else:
-        default_meta = 40.0  # Palma em t/ha de matéria verde
-    
-    meta_ton = st.number_input("🎯 Meta (t/ha):", min_value=0.1, value=default_meta, step=0.5, format="%.1f")
+    meta_ton = st.select_slider(
+        "🎯 Meta de Produtividade (t/ha):", 
+        options=[float(i/2) for i in range(2, 31)], 
+        value=4.0 if cultura == "Soja" else 8.0
+    )
 
 nome_para_arquivo = nome_cliente_input.replace(" ", "_") if nome_cliente_input else "Cliente"
 
-# ---------------- ANÁLISE DE SOLO ----------------
-st.title("🌱 SISTEMA DE PRESCRIÇÃO AGRONÔMICA")
-st.write(f"👨‍🔬 Consultor: Felipe Amorim | 📅 Data: {data_hoje}")
+# ---------------- CABEÇALHO ----------------
+st.title("SISTEMA DE PRESCRIÇÃO AGRONÔMICA")
+st.write(f"**Consultor:** Felipe Amorim | **Data:** {data_hoje}")
 
-st.subheader("🔬 Análise de Solo")
-c1, c2, c3 = st.columns(3)
-with c1:
-    p_solo = st.number_input("Fósforo (mg/dm³)", min_value=0.0, value=8.0)
-    k_solo = st.number_input("Potássio (cmolc/dm³)", min_value=0.0, value=0.15)
-with c2:
-    argila = st.number_input("Argila (%)", min_value=0.0, value=35.0)
-    v_atual = st.number_input("V% Atual", min_value=0.0, max_value=100.0, value=40.0)
-with c3:
-    ctc_t = st.number_input("CTC (T)", min_value=0.0, value=3.25)
-    prnt_calc = st.number_input("PRNT do Calcário (%)", min_value=50.0, max_value=110.0, value=85.0)
-    
-    # Alumínio para gessagem
-    aluminio = st.number_input("Alumínio (cmolc/dm³)", min_value=0.0, value=0.0, step=0.1)
+# ---------------- 1️⃣ ANÁLISE DE SOLO ----------------
+st.subheader("1️⃣ Análise de Solo (Química e Física)")
+col1, col2, col3 = st.columns(3)
+with col1:
+    p_solo = st.number_input("Fósforo (mg/dm³)", 0.0, value=8.0)
+    k_solo = st.number_input("Potássio (cmolc/dm³)", 0.0, value=0.15)
+    ph_solo = st.number_input("pH do Solo", 0.0, 14.0, value=5.5)
+with col2:
+    argila = st.number_input("Argila (%)", 0.0, 100.0, value=35.0)
+    v_atual = st.number_input("V% Atual", 0.0, 100.0, value=40.0)
+    al_solo = st.number_input("Alumínio (cmolc/dm³)", 0.0, value=0.0)
+    ca_solo = st.number_input("Cálcio (cmolc/dm³)", 0.0, value=1.5, help="Importante para cálculo mais preciso da gessagem")
+with col3:
+    ctc = st.number_input("CTC (cmolc/dm³)", 0.0, value=3.25)
+    prnt = st.number_input("PRNT (%)", 0.0, 100.0, value=85.0)
+    s_solo = st.number_input("Enxofre (mg/dm³)", 0.0, value=8.0, help="Importante para necessidade de gesso")
 
-# ---------------- LÓGICA DE CÁLCULO (REFERÊNCIAS TÉCNICAS) ----------------
-# 1. Calagem (SBCS): V alvo 70% para Soja/Palma e 60% para Milho
-v_alvo = 70 if cultura in ["Soja", "Palma"] else 60
-nc = max(0, ((v_alvo - v_atual) * ctc_t) / prnt_calc)
+# ---------------- LÓGICA TÉCNICA ----------------
+def interpretar_solo(p, k, arg):
+    if arg > 35: lim_p = [3, 6, 9, 12]
+    else: lim_p = [6, 12, 18, 30]
+    niv_p = "Baixo" if p <= lim_p[1] else "Médio" if p <= lim_p[2] else "Bom"
+    niv_k = "Baixo" if k <= 0.15 else "Médio" if k <= 0.30 else "Bom"
+    return "Argiloso" if arg > 35 else "Arenoso/Médio", niv_p, niv_k
+
+classe_txt, nivel_p, nivel_k = interpretar_solo(p_solo, k_solo, argila)
+
+v_alvo = 70 if cultura == "Soja" else 60
+nc = max(0.0, ((v_alvo - v_atual) * ctc) / prnt)
 total_calc = nc * area
 
-# 2. Gessagem (Embrapa): Baseado no teor de argila e alumínio
-if argila > 40 or aluminio > 0.5:
-    ng = (50 * argila) / 1000
-else:
-    ng = 0
+# Gessagem com limite de segurança
+m_atual = (al_solo / (al_solo + (ctc - al_solo))) * 100 if (al_solo + (ctc - al_solo)) > 0 else 0
+ng_base = (argila * 50) / 1000 if (m_atual > 20 or al_solo > 0.5) else 0.0
+
+sat_al = al_solo / ctc * 100 if ctc > 0 else 0
+
+ng = ng_base
+if ng_base > 0:
+    if sat_al > 20:
+        ng = min(ng_base, 2.0)
+        if ng_base > 2.0:
+            st.warning(f"⚠️ ATENÇÃO - Gessagem reduzida para segurança: O cálculo original indicava {ng_base:.2f} t/ha, mas devido à alta saturação de alumínio ({sat_al:.1f}%), a dose foi limitada a 2.0 t/ha para evitar lixiviação de nutrientes.")
+    
+    if ca_solo > 3.0:
+        ng = min(ng, 1.5)
+        st.info(f"ℹ️ Gessagem ajustada: Solo com bom teor de cálcio ({ca_solo:.1f} cmolc/dm³). Dose reduzida para {ng:.2f} t/ha para evitar excesso.")
+
 total_gesso = ng * area
 
-# 3. Adubação NPK (IPNI/Embrapa - exportação por cultura)
+# Recomendação de P e K com limite para solos com teores altos
+n_plantio, n_cobertura = 0, 0
 if cultura == "Soja":
-    rec_p = meta_ton * 18   # Soja extrai mais P
-    rec_k = meta_ton * 22
-elif cultura == "Milho":
-    rec_p = meta_ton * 14
-    rec_k = meta_ton * 18
-else:  # Palma
-    rec_p = meta_ton * 10   # Palma em t de matéria verde
-    rec_k = meta_ton * 25   # Palma é exigente em K
-
-# 4. Nitrogênio (N) - Recomendação por cultura
-if cultura == "Milho":
-    # Embrapa Milho e Sorgo: 25kg N por tonelada de grão
-    rec_n = meta_ton * 25
-    n_plantio = rec_n * 0.2
-    n_cobertura = rec_n * 0.8
-    n_plantio_total = n_plantio * area
-    n_cobertura_total = n_cobertura * area
-elif cultura == "Soja":
-    # Soja: pequena dose no plantio + inoculação
-    rec_n = 20  # kg/ha no plantio
-    n_plantio = rec_n
-    n_cobertura = 0
-    n_plantio_total = n_plantio * area
-    n_cobertura_total = 0
-else:  # Palma
-    # Palma: N via esterco + complemento mineral
-    rec_n = meta_ton * 12
-    n_plantio = rec_n * 0.6
-    n_cobertura = rec_n * 0.4
-    n_plantio_total = n_plantio * area
-    n_cobertura_total = n_cobertura * area
-
-# Formulação de Adubo
-st.subheader("🧪 Configuração da Adubação")
-f1, f2, f3 = st.columns(3)
-fn = f1.number_input("N (%) na Fórmula", min_value=0.0, value=4.0, step=1.0)
-fp = f2.number_input("P (%) na Fórmula", min_value=0.0, value=20.0, step=1.0)
-fk = f3.number_input("K (%) na Fórmula", min_value=0.0, value=20.0, step=1.0)
-
-# Validação da fórmula
-if fp <= 0 or fk <= 0:
-    st.error("❌ Os percentuais de P e K na fórmula devem ser maiores que 0!")
-    st.stop()
-
-# ---------------- CÁLCULO DA DOSE DE ADUBO (CORRIGIDO COM N) ----------------
-# Dose baseada no N do plantio (se for milho)
-if cultura == "Milho" and fn > 0:
-    dose_ha_n = n_plantio / (fn / 100)
+    rec_n, rec_p = 0, (meta_ton * 15) * (1.5 if nivel_p == "Baixo" else 1.0)
+    rec_k = (meta_ton * 20) * (1.4 if nivel_k == "Baixo" else 1.0)
+    
+    if nivel_p == "Bom":
+        rec_p = rec_p * 0.5
+        st.info(f"ℹ️ Fósforo reduzido: Nível atual de P é BOM ({p_solo} mg/dm³). Recomendação ajustada para {rec_p:.0f} kg/ha de P2O5.")
+    
+    if nivel_k == "Bom":
+        rec_k = rec_k * 0.5
+        st.info(f"ℹ️ Potássio reduzido: Nível atual de K é BOM ({k_solo} cmolc/dm³). Recomendação ajustada para {rec_k:.0f} kg/ha de K2O.")
+        
 else:
-    dose_ha_n = 0
+    rec_n = meta_ton * 22
+    n_plantio = 30
+    n_cobertura = max(0.0, rec_n - n_plantio)
+    rec_p = (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0)
+    rec_k = (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
+    
+    if nivel_p == "Bom":
+        rec_p = rec_p * 0.5
+        st.info(f"ℹ️ Fósforo reduzido: Nível atual de P é BOM ({p_solo} mg/dm³). Recomendação ajustada para {rec_p:.0f} kg/ha de P2O5.")
+    
+    if nivel_k == "Bom":
+        rec_k = rec_k * 0.5
+        st.info(f"ℹ️ Potássio reduzido: Nível atual de K é BOM ({k_solo} cmolc/dm³). Recomendação ajustada para {rec_k:.0f} kg/ha de K2O.")
 
-# Dose baseada no P
-dose_ha_p = rec_p / (fp / 100) if fp > 0 else 0
-
-# Dose baseada no K
-dose_ha_k = rec_k / (fk / 100) if fk > 0 else 0
-
-# Pega a maior dose para não faltar nenhum nutriente
-doses_validas = [d for d in [dose_ha_n, dose_ha_p, dose_ha_k] if d > 0]
-if doses_validas:
-    dose_ha = max(doses_validas)
-else:
-    st.error("❌ Não foi possível calcular a dose. Verifique os percentuais da fórmula.")
-    st.stop()
-
-total_adubo = dose_ha * area
-sacos_50kg = math.ceil(total_adubo / 50)
-
-# ---------------- ANÁLISE DE BALANÇO E SUGESTÕES ----------------
-# Definir necessidades por cultura
-if cultura == "Milho":
-    n_necessario = n_plantio
-    p_necessario = rec_p
-    k_necessario = rec_k
-elif cultura == "Soja":
-    n_necessario = n_plantio
-    p_necessario = rec_p
-    k_necessario = rec_k
-else:  # Palma
-    n_necessario = n_plantio
-    p_necessario = rec_p
-    k_necessario = rec_k
-
-sugestoes, fontes, n_fornecido, p_fornecido, k_fornecido, saldo_n, saldo_p, saldo_k = sugerir_ajustes(
-    cultura, dose_ha, fn, fp, fk, 
-    n_necessario, p_necessario, k_necessario
-)
-
-# ---------------- RESULTADOS NA CALCULADORA ----------------
-st.subheader("📊 Resultados da Recomendação")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric("Calcário (t/ha)", f"{nc:.2f}")
-    st.metric("Total Calcário (t)", f"{total_calc:.2f}")
-with col2:
-    st.metric("Gesso (t/ha)", f"{ng:.2f}")
-    st.metric("Total Gesso (t)", f"{total_gesso:.2f}")
-with col3:
-    st.metric("Adubo (kg/ha)", f"{dose_ha:.0f}")
-    st.metric("Total Adubo (kg)", f"{total_adubo:.1f}")
-    st.metric("Sacos 50kg", f"{sacos_50kg}")
-
-# Balanço de Nutrientes
+# ---------------- 2️⃣ DASHBOARD ----------------
 st.divider()
-st.subheader("⚖️ Balanço de Nutrientes do Adubo")
+st.subheader("2️⃣ Diagnóstico e Metas")
+m1, m2, m3, m4, m5 = st.columns(5)
+m1.metric("Textura Solo", classe_txt)
+m2.metric("V% Alvo", f"{v_alvo}%")
+m3.metric("Status P", nivel_p)
+m4.metric("Status K", nivel_k)
+m5.metric("Alumínio (m%)", f"{m_atual:.1f}%")
 
-colb1, colb2, colb3 = st.columns(3)
-with colb1:
-    cor_n = "normal" if abs(saldo_n) <= 2 else "inverse"
-    st.metric("N fornecido (kg/ha)", f"{n_fornecido:.1f}", 
-              delta=f"{saldo_n:+.1f} do necessário", delta_color=cor_n)
-with colb2:
-    cor_p = "normal" if abs(saldo_p) <= 5 else "inverse"
-    st.metric("P₂O₅ fornecido (kg/ha)", f"{p_fornecido:.1f}", 
-              delta=f"{saldo_p:+.1f} do necessário", delta_color=cor_p)
-with colb3:
-    cor_k = "normal" if abs(saldo_k) <= 5 else "inverse"
-    st.metric("K₂O fornecido (kg/ha)", f"{k_fornecido:.1f}", 
-              delta=f"{saldo_k:+.1f} do necessário", delta_color=cor_k)
+# ---------------- FUNÇÃO PARA SUGERIR FONTES CONCENTRADAS ----------------
+def sugerir_fontes_concentradas(rec_p, rec_k, rec_n_plantio, area):
+    """Sugere fontes comerciais concentradas para economizar"""
+    
+    # MAP (52% P2O5, 10% N) - Fonte de Fósforo
+    map_kg = rec_p / 0.52 if rec_p > 0 else 0
+    n_do_map = map_kg * 0.10
+    
+    # KCl (60% K2O) - Fonte de Potássio
+    kcl_kg = rec_k / 0.60 if rec_k > 0 else 0
+    
+    # Ureia (45% N) - Complemento de Nitrogênio no plantio
+    n_faltante = max(0, rec_n_plantio - n_do_map)
+    ureia_plantio_kg = n_faltante / 0.45 if n_faltante > 0 else 0
+    
+    # Superfosfato Simples (18% P2O5, 10% S) - Opção alternativa para P
+    sss_kg = rec_p / 0.18 if rec_p > 0 else 0
+    
+    # Yurin (20% N, 20% K2O) - Opção alternativa para N+K
+    yurin_kg = rec_k / 0.20 if rec_k > 0 else 0
+    n_do_yurin = yurin_kg * 0.20
+    
+    return {
+        "MAP": map_kg,
+        "KCl": kcl_kg,
+        "Ureia_plantio": ureia_plantio_kg,
+        "SSS": sss_kg,
+        "Yurin": yurin_kg,
+        "n_do_yurin": n_do_yurin
+    }
 
-# Sugestões de ajuste
-if sugestoes:
-    st.subheader("🔧 Sugestões de Ajuste Nutricional")
+# ---------------- FUNÇÃO PARA VALIDAR PRATICIDADE ----------------
+def validar_praticidade_recomendacao(dose_final, f_n, f_p, f_k, rec_p, rec_k, n_plantio, area, cultura):
+    """Valida se a recomendação é praticável e alerta sobre problemas"""
     
-    for s in sugestoes:
-        st.markdown(f'<div class="warning-box">{s}</div>', unsafe_allow_html=True)
+    problemas = []
+    sugestoes = []
+    alerta_salinidade = False
     
-    # Detalhamento das fontes
-    if 'n' in fontes:
-        with st.expander("📌 Fontes para NITROGÊNIO"):
-            f_n = fontes['n']
-            st.write(f"**Faltam {f_n['falta']:.1f} kg/ha de N**")
-            st.write(f"• Ureia (45% N): **{f_n['ureia']:.1f} kg/ha**")
-            st.write(f"• Sulfato de Amônio (20% N): **{f_n['sulfato_amonio']:.1f} kg/ha**")
-            st.write(f"• Nitrato de Cálcio (15% N): **{f_n['nitrato_calcio']:.1f} kg/ha**")
+    DOSE_MAX = 800
     
-    if 'p' in fontes:
-        with st.expander("📌 Fontes para FÓSFORO"):
-            f_p = fontes['p']
-            st.write(f"**Faltam {f_p['falta']:.1f} kg/ha de P₂O₅**")
-            st.write(f"• MAP (48% P₂O₅): **{f_p['map']:.1f} kg/ha**")
-            st.write(f"• Superfosfato Triplo (41% P₂O₅): **{f_p['super_triplo']:.1f} kg/ha**")
-            st.write(f"• Superfosfato Simples (18% P₂O₅): **{f_p['super_simples']:.1f} kg/ha**")
+    # 1. Limite de dose máxima
+    if dose_final > DOSE_MAX:
+        problemas.append(f"Dose muito alta ({dose_final:.0f} kg/ha) - acima do limite prático de {DOSE_MAX} kg/ha")
+        sugestoes.append("Use fontes concentradas (MAP, KCl, Superfosfato Triplo) em vez de formulados")
     
-    if 'k' in fontes:
-        with st.expander("📌 Fontes para POTÁSSIO"):
-            f_k = fontes['k']
-            st.write(f"**Faltam {f_k['falta']:.1f} kg/ha de K₂O**")
-            st.write(f"• KCl (60% K₂O): **{f_k['kcl']:.1f} kg/ha**")
-            st.write(f"• Sulfato de Potássio (50% K₂O): **{f_k['k2so4']:.1f} kg/ha**")
+    # 2. Salinidade do K no plantio (apenas para milho)
+    if cultura == "Milho" and f_k > 0:
+        k2o_no_plantio = dose_final * (f_k / 100)
+        if k2o_no_plantio > 80:
+            alerta_salinidade = True
+            problemas.append(f"K2O no plantio ({k2o_no_plantio:.0f} kg/ha) acima do seguro (80 kg/ha) - risco de salinidade")
+            sugestoes.append(f"Parceler o K: aplique 80 kg/ha no plantio e {rec_k - 80:.0f} kg/ha em cobertura via KCl")
     
-else:
-    st.markdown('<div class="success-box">✅ Fórmula equilibrada! Todos os nutrientes atendidos dentro da faixa ideal.</div>', unsafe_allow_html=True)
+    # 3. Verifica se o formulado tem boa relação P:K
+    if f_p > 0 and f_k > 0 and rec_k > 0:
+        relacao_pk = f_p / f_k
+        relacao_necessaria = rec_p / rec_k
+        
+        if abs(relacao_pk - relacao_necessaria) > 0.5:
+            problemas.append(f"Relação P:K do formulado ({f_p}:{f_k}) não atende a necessidade ({rec_p:.0f}:{rec_k:.0f})")
+            sugestoes.append("Use fontes separadas (MAP para P, KCl para K) para maior flexibilidade")
+    
+    return problemas, sugestoes, alerta_salinidade
 
-# Detalhamento de Nitrogênio específico
-if cultura == "Milho":
-    st.divider()
-    st.subheader("📊 Manejo Nitrogenado (Milho)")
+# ---------------- 3️⃣ PRESCRIÇÃO E ADUBO ----------------
+st.write("---")
+st.subheader("3️⃣ Planejamento de Fertilizantes e Corretivos")
+r1, r2, r3 = st.columns([1, 1, 2])
+with r1:
+    st.markdown("### 🪨 Calagem")
+    st.metric("Dose (t/ha)", f"{nc:.2f}")
+    st.write(f"Total: **{total_calc:.2f} t**")
+with r2:
+    st.markdown("### ⚪ Gessagem")
+    st.metric("Dose (t/ha)", f"{ng:.2f}")
+    st.write(f"Total: **{total_gesso:.2f} t**")
+    if ng_base > ng:
+        st.caption(f"↪️ Cálculo original: {ng_base:.2f} t/ha")
+with r3:
+    if cultura == "Milho":
+        nc1, nc2, nc3 = st.columns(3)
+        nc1.metric("Total N", f"{rec_n:.0f} kg")
+        nc2.metric("Plantio", f"{n_plantio} kg")
+        nc3.metric("Cobertura", f"{n_cobertura:.0f} kg")
+    st.markdown("### 🛒 Formulação Comercial")
+    st.caption("Digite a formulação do adubo que o cliente pretende usar (ex: 10-10-10, 04-14-08, 08-28-16)")
+    cn, cp, ck = st.columns(3)
+    f_n = cn.number_input("N%", 0, value=0 if cultura=="Soja" else 4)
+    f_p = cp.number_input("P%", 0, value=20)
+    f_k = ck.number_input("K%", 0, value=20)
     
-    col_n1, col_n2 = st.columns(2)
-    with col_n1:
-        st.metric("N no Plantio (kg/ha)", f"{n_plantio:.1f}")
-        st.metric("Total N Plantio (kg)", f"{n_plantio_total:.1f}")
-        # Sugestão de ureia para plantio se necessário
-        if saldo_n < -1:
-            ureia_plantio = abs(saldo_n) / 0.45
-            st.info(f"🌱 Completar N no plantio: **{ureia_plantio:.1f} kg/ha de Ureia**")
-    
-    with col_n2:
-        st.metric("N em Cobertura (kg/ha)", f"{n_cobertura:.1f}")
-        st.metric("Total N Cobertura (kg)", f"{n_cobertura_total:.1f}")
-        # Sugestão de ureia para cobertura
-        ureia_cobertura = n_cobertura / 0.45
-        st.info(f"🌽 Cobertura recomendada: **{ureia_cobertura:.1f} kg/ha de Ureia** (estádio V4-V6)")
+    if f_p > 0 or f_k > 0:
+        dose_p = (rec_p / f_p * 100) if f_p > 0 else 0
+        dose_k = (rec_k / f_k * 100) if f_k > 0 else 0
+        dose_final = max(dose_p, dose_k)
+        total_sacos = math.ceil((dose_final * area) / 50)
+        
+        # VALIDAÇÕES DE PRATICIDADE
+        problemas, sugestoes, alerta_salinidade = validar_praticidade_recomendacao(
+            dose_final, f_n, f_p, f_k, rec_p, rec_k, n_plantio, area, cultura
+        )
+        
+        # Exibe alertas se houver problemas
+        if problemas:
+            st.error("⚠️ **ATENÇÃO - FORMULAÇÃO INADEQUADA!**")
+            for problema in problemas:
+                st.write(f"- {problema}")
+            
+            st.markdown("---")
+            st.markdown("### 🔧 SUGESTÕES PARA ECONOMIZAR:")
+            for sugestao in sugestoes:
+                st.info(f"💡 {sugestao}")
+            
+            # Sugere fontes concentradas
+            st.markdown("---")
+            st.markdown("### 📊 OPÇÕES MAIS ECONÔMICAS E SEGURAS:")
+            
+            fontes = sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, area)
+            
+            col_op1, col_op2, col_op3 = st.columns(3)
+            
+            with col_op1:
+                st.markdown("**Opção 1: MAP + KCl + Ureia**")
+                if fontes["MAP"] > 0:
+                    st.write(f"📦 MAP: **{fontes['MAP']:.0f} kg/ha** ({math.ceil(fontes['MAP'] * area / 50)} sacos)")
+                if fontes["KCl"] > 0:
+                    st.write(f"📦 KCl: **{fontes['KCl']:.0f} kg/ha** ({math.ceil(fontes['KCl'] * area / 50)} sacos)")
+                if fontes["Ureia_plantio"] > 0:
+                    st.write(f"📦 Ureia plantio: **{fontes['Ureia_plantio']:.0f} kg/ha** ({math.ceil(fontes['Ureia_plantio'] * area / 50)} sacos)")
+                total_sacos_op1 = math.ceil((fontes["MAP"] + fontes["KCl"] + fontes["Ureia_plantio"]) * area / 50)
+                st.success(f"💰 Total: **{total_sacos_op1} sacos** (área {area:.0f} ha)")
+            
+            with col_op2:
+                st.markdown("**Opção 2: Formulado 04-20-20**")
+                dose_04_20_20 = max(rec_p / 0.20, rec_k / 0.20) if rec_p > 0 or rec_k > 0 else 0
+                sacos_04_20_20 = math.ceil(dose_04_20_20 * area / 50)
+                st.write(f"📦 Dose: **{dose_04_20_20:.0f} kg/ha**")
+                st.success(f"💰 Total: **{sacos_04_20_20} sacos**")
+                if cultura == "Milho" and n_plantio > 0:
+                    n_fornecido_04 = dose_04_20_20 * 0.04
+                    st.caption(f"ℹ️ Fornece {n_fornecido_04:.0f} kg/ha de N no plantio")
+            
+            with col_op3:
+                st.markdown("**Opção 3: Formulado 00-20-20 + Ureia**")
+                dose_00_20_20 = rec_k / 0.20 if rec_k > 0 else 0
+                ureia_extra = max(0, n_plantio - (dose_00_20_20 * 0)) / 0.45
+                sacos_00_20_20 = math.ceil(dose_00_20_20 * area / 50)
+                sacos_ureia_extra = math.ceil(ureia_extra * area / 50)
+                st.write(f"📦 00-20-20: **{dose_00_20_20:.0f} kg/ha** ({sacos_00_20_20} sacos)")
+                if ureia_extra > 0:
+                    st.write(f"📦 Ureia: **{ureia_extra:.0f} kg/ha** ({sacos_ureia_extra} sacos)")
+                st.success(f"💰 Total: **{sacos_00_20_20 + sacos_ureia_extra} sacos**")
+        
+        # Alerta de salinidade específico
+        if alerta_salinidade:
+            st.warning("""
+            ⚠️ **RISCO DE SALINIDADE NO PLANTIO!**
+            
+            O potássio aplicado em excesso no sulco pode queimar as sementes e reduzir o estande.
+            
+            **Recomendação:** Aplique no máximo 80 kg/ha de K2O no plantio. O restante deve ser aplicado em cobertura.
+            """)
+        
+        # Exibe a recomendação original (sempre aparece)
+        st.markdown("---")
+        st.markdown("### 📋 RECOMENDAÇÃO ORIGINAL (conforme formulado escolhido)")
+        
+        if cultura == "Milho" and f_n > 0:
+            n_fornecido = (dose_final * f_n) / 100
+            if n_fornecido > n_plantio * 1.1:
+                st.warning(f"⚠️ O formulado {f_n}-{f_p}-{f_k} fornece **{n_fornecido:.0f} kg/ha de N** no plantio, acima dos {n_plantio} kg/ha recomendados.")
+            elif n_fornecido > n_plantio:
+                st.info(f"ℹ️ O formulado fornece {n_fornecido:.0f} kg/ha de N no plantio. Ajuste a adubação de cobertura para {(rec_n - n_fornecido):.0f} kg/ha.")
+        
+        st.success(f"**Dose:** {dose_final:.0f} kg/ha | **Total:** {total_sacos} sacos de 50kg para a área total")
+        
+        # Mostra quanto de cada nutriente o formulado fornece
+        st.caption(f"""
+        📊 **O que o formulado fornece:**
+        - N: {dose_final * f_n / 100:.0f} kg/ha
+        - P2O5: {dose_final * f_p / 100:.0f} kg/ha
+        - K2O: {dose_final * f_k / 100:.0f} kg/ha
+        """)
 
-elif cultura == "Soja":
-    st.divider()
-    st.subheader("📊 Manejo de Nitrogênio (Soja)")
-    st.info("🌱 **Inoculação obrigatória com Bradyrhizobium** - Dispensa N mineral, exceto pequena dose no plantio.")
-    st.metric("N no Plantio (kg/ha)", f"{n_plantio:.1f}")
+# Checklist de segurança
+st.divider()
+st.subheader("✅ Checklist de Segurança para Aplicação")
+col_check1, col_check2, col_check3 = st.columns(3)
 
-elif cultura == "Palma":
-    st.divider()
-    st.subheader("📊 Manejo da Palma Forrageira")
-    st.info(f"🌵 **Variedade: {variedade}**")
-    st.write("• Adubação orgânica: 20-30 t/ha de esterco curtido")
-    st.write(f"• N mineral: {n_plantio:.1f} kg/ha no plantio + {n_cobertura:.1f} kg/ha em cobertura")
+with col_check1:
+    st.markdown("**Calagem**")
+    if nc > 5.0:
+        st.error("[ATENÇÃO] Dose de calcário muito alta - parcelar aplicação")
+    elif nc > 3.0:
+        st.warning("[CUIDADO] Dose alta - aplicar com antecedência mínima de 90 dias")
+    else:
+        st.success("[OK] Dose dentro do recomendado")
 
-st.success(f"📦 **Logística:** Necessários {sacos_50kg} sacos de 50kg do adubo {fn:.0f}-{fp:.0f}-{fk:.0f}")
+with col_check2:
+    st.markdown("**Gessagem**")
+    if ng > 2.0:
+        st.error("[ATENÇÃO] Gessagem elevada - risco de lixiviação de K e Mg")
+    elif ng > 1.0:
+        st.warning("[CUIDADO] Gessagem moderada - verificar necessidade de Ca e S")
+    else:
+        st.success("[OK] Dose segura")
 
-# ---------------- GERAÇÃO DO PDF ----------------
+with col_check3:
+    if cultura == "Milho":
+        st.markdown("**Nitrogênio (Milho)**")
+        if n_cobertura > 120:
+            st.warning("[CUIDADO] N em cobertura alto - parcelar em V4 e V6")
+        else:
+            st.success("[OK] N em cobertura adequado")
+    else:
+        st.markdown("**Nitrogênio (Soja)**")
+        st.info("Soja - fixação biológica de N (não necessita adubação nitrogenada)")
+
+# ---------------- 4️⃣ PDF RELATÓRIO ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
+    def fix_txt(t): 
+        t = t.replace('ç', 'ç')
+        t = t.replace('ã', 'ã')
+        t = t.replace('õ', 'õ')
+        t = t.replace('á', 'á')
+        t = t.replace('é', 'é')
+        t = t.replace('í', 'í')
+        t = t.replace('ó', 'ó')
+        t = t.replace('ú', 'ú')
+        t = t.replace('â', 'â')
+        t = t.replace('ê', 'ê')
+        t = t.replace('ô', 'ô')
+        t = t.replace('à', 'à')
+        t = t.replace('ç'.upper(), 'Ç')
+        t = t.replace('ã'.upper(), 'Ã')
+        t = t.replace('õ'.upper(), 'Õ')
+        t = t.replace('á'.upper(), 'Á')
+        t = t.replace('é'.upper(), 'É')
+        t = t.replace('í'.upper(), 'Í')
+        t = t.replace('ó'.upper(), 'Ó')
+        t = t.replace('ú'.upper(), 'Ú')
+        t = t.replace('â'.upper(), 'Â')
+        t = t.replace('ê'.upper(), 'Ê')
+        t = t.replace('ô'.upper(), 'Ô')
+        return str(t).encode('latin-1', 'replace').decode('latin-1')
     
-    # Cabeçalho banner
+    data_pdf = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
+    
+    # Cabeçalho
     pdf.set_fill_color(34, 139, 34)
-    pdf.rect(0, 0, 210, 40, 'F')
+    pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.ln(10)
-    pdf.cell(190, 10, remover_acentos("PRESCRIÇÃO TÉCNICA AGRONÔMICA"), 0, 1, "C")
-    pdf.set_font("Helvetica", "", 11)
-    pdf.cell(190, 5, remover_acentos(f"Consultor: Felipe Amorim | Data: {data_hoje}"), 0, 1, "C")
-
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(190, 15, fix_txt("RELATÓRIO DE RECOMENDAÇÃO TÉCNICA"), align="C", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(190, 5, fix_txt(f"Consultor: Felipe Amorim | Data: {data_pdf}"), align="C", ln=True)
+    
+    # Dados Gerais
     pdf.set_text_color(0, 0, 0)
     pdf.ln(15)
-
-    # Identificação
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.set_fill_color(235, 245, 235)
-    pdf.cell(190, 8, remover_acentos("1. IDENTIFICAÇÃO"), 0, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.ln(2)
-    pdf.cell(190, 7, remover_acentos(f"Cliente: {nome_cliente_input} | Fazenda: {fazenda}"), 0, 1)
-    area_format = f"{area:g}"
-    pdf.cell(190, 7, remover_acentos(f"Local: {municipio}-{estado} | Área: {area_format} ha | Cultura: {cultura}"), 0, 1)
-    if cultura == "Palma":
-        pdf.cell(190, 7, remover_acentos(f"Variedade: {variedade} | Meta: {meta_ton} t/ha"), 0, 1)
-    else:
-        pdf.cell(190, 7, remover_acentos(f"Meta: {meta_ton} t/ha"), 0, 1)
-
-    # Correção de solo
-    pdf.ln(5)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(190, 8, remover_acentos("2. CORREÇÃO DO SOLO"), 0, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.ln(2)
-    pdf.cell(190, 7, remover_acentos(f"Calcário (PRNT {prnt_calc:.0f}%): {nc:.2f} t/ha | Total: {total_calc:.2f} t"), 0, 1)
-    if ng > 0:
-        pdf.cell(190, 7, remover_acentos(f"Gesso Agrícola: {ng:.2f} t/ha | Total: {total_gesso:.2f} t"), 0, 1)
-
-    # Adubação
-    pdf.ln(5)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(190, 8, remover_acentos("3. ADUBAÇÃO MINERAL"), 0, 1, "L", fill=True)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.ln(2)
-    pdf.cell(190, 7, remover_acentos(f"Adubo formulado: {fn:.0f}-{fp:.0f}-{fk:.0f}"), 0, 1)
-    pdf.cell(190, 7, remover_acentos(f"Dose: {dose_ha:.0f} kg/ha | Total: {total_adubo:.1f} kg ({sacos_50kg} sacos 50kg)"), 0, 1)
-
-    # Balanço de nutrientes
-    pdf.ln(2)
+    pdf.set_fill_color(230, 230, 230)
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(190, 7, remover_acentos("Balanço de Nutrientes (kg/ha):"), 0, 1)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.cell(190, 6, remover_acentos(f"N: necessário {n_necessario:.1f} | fornecido {n_fornecido:.1f} | saldo {saldo_n:+.1f}"), 0, 1)
-    pdf.cell(190, 6, remover_acentos(f"P₂O₅: necessário {p_necessario:.1f} | fornecido {p_fornecido:.1f} | saldo {saldo_p:+.1f}"), 0, 1)
-    pdf.cell(190, 6, remover_acentos(f"K₂O: necessário {k_necessario:.1f} | fornecido {k_fornecido:.1f} | saldo {saldo_k:+.1f}"), 0, 1)
-
-    # Manejo Nitrogenado
-    if cultura == "Milho":
-        pdf.ln(2)
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(190, 7, remover_acentos("Manejo de Nitrogênio (Milho):"), 0, 1)
-        pdf.set_font("Helvetica", "", 11)
-        pdf.cell(190, 6, remover_acentos(f"- N no Plantio: {n_plantio:.1f} kg/ha (Total: {n_plantio_total:.1f} kg)"), 0, 1)
-        pdf.cell(190, 6, remover_acentos(f"- N em Cobertura: {n_cobertura:.1f} kg/ha (Total: {n_cobertura_total:.1f} kg)"), 0, 1)
-        pdf.cell(190, 6, remover_acentos(f"- Ureia em cobertura: {n_cobertura/0.45:.1f} kg/ha (estágio V4-V6)"), 0, 1)
-        
-        if saldo_n < -1:
-            pdf.set_text_color(255, 0, 0)
-            pdf.cell(190, 6, remover_acentos(f"⚠️ Completar N no plantio com {abs(saldo_n)/0.45:.1f} kg/ha de Ureia"), 0, 1)
-            pdf.set_text_color(0, 0, 0)
-
-    # Observações
-    pdf.ln(5)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(190, 8, remover_acentos("4. OBSERVAÇÕES E RECOMENDAÇÕES"), 0, 1, "L", fill=True)
+    pdf.cell(190, 8, fix_txt(" 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO"), ln=True, fill=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.ln(2)
+    pdf.cell(190, 7, fix_txt(f" Cliente: {nome_cliente_input if nome_cliente_input else 'Não informado'} | Fazenda: {fazenda}"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Cultura: {cultura} | Área: {area:.2f} ha | Meta: {meta_ton} t/ha"), ln=True)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 7, fix_txt(f" Status Solo: pH ({ph_solo}) | Alumínio ({al_solo}) | Textura ({classe_txt})"), ln=True)
     
-    if cultura == "Palma":
-        pdf.multi_cell(190, 5, remover_acentos(f"- Variedade: {variedade}\n- Adubação Orgânica: 20-30 t/ha de esterco curtido.\n- Evitar excesso de N mineral para não queimar a planta.\n- Colheita a partir de 18-24 meses."))
-    elif cultura == "Milho":
-        pdf.multi_cell(190, 5, remover_acentos("- Realizar cobertura nitrogenada com solo úmido (estágio V4-V6).\n- Monitorar lagarta-do-cartucho e percevejo.\n- Em caso de veranico, parcelar a cobertura de N.\n- Aplicar ureia com inibidor de urease se possível."))
-    else:
-        pdf.multi_cell(190, 5, remover_acentos("- Inoculação obrigatória com Bradyrhizobium (estirpes aprovadas).\n- Co-inoculação com Azospirillum para maior eficiência.\n- Monitorar ferrugem asiática e percevejo marrom."))
-
-    # Sugestões de fontes complementares
-    if fontes:
-        pdf.ln(3)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(190, 6, fix_txt(f" Fósforo: {p_solo} mg/dm³ ({nivel_p}) | Potássio: {k_solo} cmolc/dm³ ({nivel_k})"), ln=True)
+    
+    # Prescrição Técnica
+    pdf.ln(5)
+    pdf.set_fill_color(230, 230, 230)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(190, 8, fix_txt(" 2. PRESCRIÇÃO TÉCNICA"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(190, 7, fix_txt(f" Calagem: {nc:.2f} t/ha (Total para a área: {total_calc:.2f} t)"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Gessagem: {ng:.2f} t/ha (Total para a área: {total_gesso:.2f} t)"), ln=True)
+    
+    if ng_base > ng:
+        pdf.set_text_color(255, 0, 0)
+        pdf.cell(190, 5, fix_txt(f"  *Observação: Dose original calculada de {ng_base:.2f} t/ha foi ajustada para segurança."), ln=True)
+        pdf.set_text_color(0, 0, 0)
+    
+    if cultura == "Milho":
         pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(190, 6, remover_acentos("Fontes complementares sugeridas:"), 0, 1)
-        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(190, 7, fix_txt(f" Recomendação de Nitrogênio (N): Total {rec_n:.0f} kg/ha"), ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(190, 6, fix_txt(f"  - Aplicação no Plantio: {n_plantio} kg/ha"), ln=True)
+        pdf.cell(190, 6, fix_txt(f"  - Aplicação em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
+    
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.ln(2)
+    d_p = (rec_p / f_p * 100) if f_p > 0 else 0
+    d_k = (rec_k / f_k * 100) if f_k > 0 else 0
+    d_final_pdf = max(d_p, d_k)
+    t_sacos_pdf = math.ceil((d_final_pdf * area) / 50)
+    
+    pdf.cell(190, 7, fix_txt(f" Adubação Sugerida: {d_final_pdf:.0f} kg/ha do formulado {f_n}-{f_p}-{f_k}"), ln=True)
+    pdf.cell(190, 7, fix_txt(f" Necessidade de Compra: {t_sacos_pdf} sacos (50kg) para a área total."), ln=True)
+    
+    # Recomendação de nutrientes
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 6, fix_txt(" Recomendação de Nutrientes:"), ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(95, 5, fix_txt(f" P2O5 recomendado: {rec_p:.0f} kg/ha"), ln=False)
+    pdf.cell(95, 5, fix_txt(f" K2O recomendado: {rec_k:.0f} kg/ha"), ln=True)
+    
+    # Sugestão de fontes concentradas no PDF
+    fontes = sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, area)
+    
+    pdf.ln(5)
+    pdf.set_fill_color(200, 230, 200)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 7, fix_txt(" SUGESTÃO DE FONTES CONCENTRADAS (MAIS ECONÔMICAS)"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 9)
+    
+    if fontes["MAP"] > 0 or fontes["KCl"] > 0:
+        pdf.cell(190, 5, fix_txt(" Opção 1: MAP + KCl + Ureia"), ln=True)
+        if fontes["MAP"] > 0:
+            pdf.cell(190, 4, fix_txt(f"  - MAP (52% P2O5, 10% N): {fontes['MAP']:.0f} kg/ha ({math.ceil(fontes['MAP'] * area / 50)} sacos)"), ln=True)
+        if fontes["KCl"] > 0:
+            pdf.cell(190, 4, fix_txt(f"  - KCl (60% K2O): {fontes['KCl']:.0f} kg/ha ({math.ceil(fontes['KCl'] * area / 50)} sacos)"), ln=True)
+        if fontes["Ureia_plantio"] > 0:
+            pdf.cell(190, 4, fix_txt(f"  - Ureia plantio (45% N): {fontes['Ureia_plantio']:.0f} kg/ha ({math.ceil(fontes['Ureia_plantio'] * area / 50)} sacos)"), ln=True)
         
-        if 'n' in fontes:
-            f_n = fontes['n']
-            pdf.cell(190, 5, remover_acentos(f"N: Ureia ({f_n['ureia']:.0f} kg/ha) ou Sulfato ({f_n['sulfato_amonio']:.0f} kg/ha)"), 0, 1)
-        if 'p' in fontes:
-            f_p = fontes['p']
-            pdf.cell(190, 5, remover_acentos(f"P: MAP ({f_p['map']:.0f} kg/ha) ou Super Triplo ({f_p['super_triplo']:.0f} kg/ha)"), 0, 1)
-        if 'k' in fontes:
-            f_k = fontes['k']
-            pdf.cell(190, 5, remover_acentos(f"K: KCl ({f_k['kcl']:.0f} kg/ha) ou Sulfato K ({f_k['k2so4']:.0f} kg/ha)"), 0, 1)
+        total_sacos_op1 = math.ceil((fontes["MAP"] + fontes["KCl"] + fontes["Ureia_plantio"]) * area / 50)
+        pdf.cell(190, 4, fix_txt(f"  Total de sacos: {total_sacos_op1} sacos"), ln=True)
+    
+    pdf.ln(3)
+    pdf.cell(190, 5, fix_txt(" Opção 2: Formulado 04-20-20"), ln=True)
+    dose_04_20_20 = max(rec_p / 0.20, rec_k / 0.20) if rec_p > 0 or rec_k > 0 else 0
+    sacos_04_20_20 = math.ceil(dose_04_20_20 * area / 50)
+    pdf.cell(190, 4, fix_txt(f"  - Dose: {dose_04_20_20:.0f} kg/ha | Total: {sacos_04_20_20} sacos"), ln=True)
+    
+    # Checklist de segurança no PDF
+    pdf.ln(5)
+    pdf.set_fill_color(255, 235, 200)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(190, 7, fix_txt(" CHECKLIST DE SEGURANÇA PARA APLICAÇÃO"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 9)
+    
+    if cultura == "Milho":
+        if n_cobertura > 120:
+            pdf.cell(190, 5, fix_txt(" [CUIDADO] Nitrogênio em cobertura elevado - parcelar em V4 e V6"), ln=True)
+        else:
+            pdf.cell(190, 5, fix_txt(" [OK] Nitrogênio em cobertura dentro do recomendado"), ln=True)
+    else:
+        pdf.cell(190, 5, fix_txt(" [INFO] Soja - fixação biológica de N (não necessita adubação nitrogenada)"), ln=True)
+    
+    if ng > 2.0:
+        pdf.cell(190, 5, fix_txt(" [ATENÇÃO] Gessagem elevada - risco de lixiviação de K e Mg"), ln=True)
+    elif ng > 0:
+        pdf.cell(190, 5, fix_txt(" [OK] Gessagem dentro da faixa segura"), ln=True)
+    
+    if nc > 3.0:
+        pdf.cell(190, 5, fix_txt(" [CUIDADO] Calagem alta - aplicar com antecedência mínima de 90 dias"), ln=True)
+    elif nc > 0:
+        pdf.cell(190, 5, fix_txt(" [OK] Calagem dentro do recomendado"), ln=True)
+    
+    if nivel_p == "Bom" and rec_p > 0:
+        pdf.cell(190, 5, fix_txt(" [INFO] Fósforo no solo já está BOM - adubação reduzida pela metade"), ln=True)
+    if nivel_k == "Bom" and rec_k > 0:
+        pdf.cell(190, 5, fix_txt(" [INFO] Potássio no solo já está BOM - adubação reduzida pela metade"), ln=True)
 
-    # Referências
-    pdf.ln(8)
+    # Nota de Responsabilidade
+    pdf.ln(5)
+    pdf.set_fill_color(255, 235, 235)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(190, 7, fix_txt(" NOTA DE RESPONSABILIDADE TÉCNICA"), ln=True, fill=True)
     pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(190, 5, remover_acentos("Referências técnicas: SBCS (2023), Embrapa Cerrados, Embrapa Milho e Sorgo, IPA/PE, IPNI Brasil."), 0, 1)
-    pdf.cell(190, 5, remover_acentos(f"Documento gerado em {data_hoje} - Consultor Responsável: Felipe Amorim"), 0, 1)
+    pdf.set_text_color(100, 0, 0)
+    pdf.multi_cell(190, 4, fix_txt("Esta recomendação baseia-se exclusivamente nos dados fornecidos pelo usuário. O sucesso da cultura depende de fatores climáticos, fitossanitários e do manejo correto no campo."))
 
-    return pdf.output(dest='S').encode('latin-1', errors='replace')
+    # Fontes
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(34, 139, 34)
+    pdf.cell(190, 8, fix_txt("FONTES E REFERÊNCIAS TÉCNICAS:"), ln=True)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_text_color(50, 50, 50)
+    
+    if cultura == "Soja":
+        ref_texto = "- Interpretação de Solo: Embrapa Soja.\n- Exportação e Extração: Manual de Adubação e Calagem para o Estado do Paraná (SBCS).\n- Calagem: Método da Elevação da Saturação por Bases (V%)."
+    else:
+        ref_texto = "- Interpretação de Solo: Embrapa Milho e Sorgo.\n- Exportação e Extração: IPNI Brasil.\n- Calagem: Método da Elevação da Saturação por Bases (V%)."
+        
+    pdf.multi_cell(190, 5, fix_txt(ref_texto))
+    
+    return pdf.output(dest='S').encode('latin-1')
 
-# ---------------- BOTÃO DOWNLOAD ----------------
 st.divider()
-if st.button("📄 Gerar Relatório Final", type="primary"):
-    with st.spinner("Gerando PDF..."):
-        pdf_bytes = gerar_pdf()
-        st.download_button(
-            label="⬇️ Baixar PDF da Prescrição", 
-            data=pdf_bytes, 
-            file_name=f"Prescricao_{nome_para_arquivo}_{datetime.now().strftime('%Y%m%d')}.pdf", 
-            mime="application/pdf"
-        )
+st.warning("⚠️ **Aviso:** Esta ferramenta é um auxílio à decisão. Sempre consulte um engenheiro agrônomo antes da aplicação.")
+if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
+    pdf_bytes = gerar_pdf()
+    st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{nome_para_arquivo}.pdf")
 
-# Rodapé informativo
-st.divider()
-st.caption(f"👨‍🔬 Sistema de Prescrição Agronômica | Felipe Amorim Consultoria | {data_hoje}")
+st.caption("Felipe Amorim | Consultoria Agronômica")
