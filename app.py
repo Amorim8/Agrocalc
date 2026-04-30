@@ -157,9 +157,9 @@ if cultura == "Soja":
         rec_k = rec_k * 0.5
         st.info(f"ℹ️ Potássio reduzido: Nível atual de K é BOM ({k_solo} cmolc/dm³). Recomendação ajustada para {rec_k:.0f} kg/ha de K2O.")
         
-else:  # Milho
+else:  # Milho - CORRIGIDO
     rec_n = meta_ton * 22
-    n_plantio = 30
+    n_plantio = min(30, rec_n)  # não força mais do que o total
     n_cobertura = max(0.0, rec_n - n_plantio)
     rec_p = (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0)
     rec_k = (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
@@ -173,11 +173,19 @@ else:  # Milho
         st.info(f"ℹ️ Potássio reduzido: Nível atual de K é BOM ({k_solo} cmolc/dm³). Recomendação ajustada para {rec_k:.0f} kg/ha de K2O.")
 
 # ---------------- PARCELAMENTO DO POTÁSSIO (MILHO) ----------------
-# Limite seguro de K2O no plantio para solo argiloso
-LIMITE_K2O_PLANTIO = 80  # kg/ha
-
+LIMITE_K2O_PLANTIO = 80
 k2o_plantio = min(rec_k, LIMITE_K2O_PLANTIO) if cultura == "Milho" else rec_k
 k2o_cobertura = max(0, rec_k - k2o_plantio) if cultura == "Milho" else 0
+
+# ---------------- PARCELAMENTO DO NITROGÊNIO (MILHO) - 3 PARCELAS ----------------
+if cultura == "Milho" and n_cobertura > 0:
+    # Divisão em 3 parcelas iguais
+    n_parcela = n_cobertura / 3
+    # Épocas sugeridas
+    epocas_cobertura = ["V4", "V6", "V8"]
+else:
+    n_parcela = 0
+    epocas_cobertura = []
 
 # ---------------- 2️⃣ DASHBOARD ----------------
 st.divider()
@@ -189,10 +197,8 @@ m3.metric("Status P", nivel_p)
 m4.metric("Status K", nivel_k)
 m5.metric("Alumínio (m%)", f"{m_atual:.1f}%")
 
-# ---------------- FUNÇÃO PARA SUGERIR FONTES CONCENTRADAS COM PARCELAMENTO ----------------
+# ---------------- FUNÇÃO PARA SUGERIR FONTES CONCENTRADAS ----------------
 def sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cultura):
-    """Sugere fontes comerciais concentradas com parcelamento do K"""
-    
     if cultura == "Milho":
         k2o_plantio_sug = min(rec_k, LIMITE_K2O_PLANTIO)
         k2o_cobertura_sug = max(0, rec_k - k2o_plantio_sug)
@@ -200,27 +206,20 @@ def sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cult
         k2o_plantio_sug = rec_k
         k2o_cobertura_sug = 0
     
-    # MAP (52% P2O5, 10% N) - Fonte de Fósforo
     map_kg = rec_p / 0.52 if rec_p > 0 else 0
     n_do_map = map_kg * 0.10
     
-    # KCl plantio (60% K2O)
     kcl_plantio_kg = k2o_plantio_sug / 0.60 if k2o_plantio_sug > 0 else 0
-    
-    # KCl cobertura (60% K2O)
     kcl_cobertura_kg = k2o_cobertura_sug / 0.60 if k2o_cobertura_sug > 0 else 0
     
-    # Ureia plantio (45% N) - complementa N
     n_faltante_plantio = max(0, n_plantio - n_do_map)
     ureia_plantio_kg = n_faltante_plantio / 0.45 if n_faltante_plantio > 0 else 0
     
-    # Ureia cobertura (45% N) - para milho
     if cultura == "Milho":
         ureia_cobertura_kg = n_cobertura / 0.45 if n_cobertura > 0 else 0
     else:
         ureia_cobertura_kg = 0
     
-    # Superfosfato Triplo (41% P2O5) - opção alternativa
     sft_kg = rec_p / 0.41 if rec_p > 0 else 0
     
     return {
@@ -254,9 +253,13 @@ with r3:
         nc1, nc2, nc3 = st.columns(3)
         nc1.metric("Total N", f"{rec_n:.0f} kg")
         nc2.metric("Plantio", f"{n_plantio} kg")
-        nc3.metric("Cobertura", f"{n_cobertura:.0f} kg")
+        nc3.metric("Cobertura Total", f"{n_cobertura:.0f} kg")
         
-        # Exibe parcelamento do K
+        # Exibe parcelamento do N em 3 vezes
+        if n_cobertura > 0:
+            st.info(f"💡 **Parcelamento do Nitrogênio em Cobertura:** {n_cobertura:.0f} kg/ha dividido em **3 aplicações**")
+            st.caption(f"   └─ {n_parcela:.0f} kg N/ha em cada aplicação nos estádios: {', '.join(epocas_cobertura)}")
+        
         if k2o_cobertura > 0:
             st.info(f"💡 **Parcelamento do Potássio:** {k2o_plantio:.0f} kg/ha de K2O no plantio + {k2o_cobertura:.0f} kg/ha de K2O em cobertura (V4-V6)")
         else:
@@ -275,12 +278,10 @@ with r3:
         dose_final = max(dose_p, dose_k)
         total_sacos = math.ceil((dose_final * area) / 50)
         
-        # Verifica excesso de P
         p_fornecido = dose_final * f_p / 100
         if p_fornecido > rec_p * 1.2 and rec_p > 0:
             st.warning(f"⚠️ **EXCESSO DE FÓSFORO!** O formulado {f_n}-{f_p}-{f_k} fornece {p_fornecido:.0f} kg/ha de P2O5, mas a necessidade é de apenas {rec_p:.0f} kg/ha. Desperdício de {p_fornecido - rec_p:.0f} kg/ha.")
         
-        # Exibe a recomendação original
         st.markdown("---")
         st.markdown("### 📋 RECOMENDAÇÃO ORIGINAL (conforme formulado escolhido)")
         
@@ -300,7 +301,6 @@ with r3:
         - K2O: {dose_final * f_k / 100:.0f} kg/ha
         """)
         
-        # Sugestão de fontes concentradas com parcelamento
         st.markdown("---")
         st.markdown("### 💰 SUGESTÃO DE FONTES CONCENTRADAS (MAIS ECONÔMICAS E SEGURAS)")
         
@@ -331,6 +331,11 @@ with r3:
                 if fontes["Ureia_cobertura"] > 0:
                     st.write(f"📦 Ureia (45% N): **{fontes['Ureia_cobertura']:.0f} kg/ha** ({math.ceil(fontes['Ureia_cobertura'] * area / 50)} sacos)")
                     st.caption(f"  └─ Fornece: {n_cobertura:.0f} kg N")
+                    
+                    # Sugestão de parcelamento da ureia em cobertura
+                    if n_cobertura > 0:
+                        ureia_parcela_kg = (n_parcela / 0.45) if n_parcela > 0 else 0
+                        st.caption(f"  💡 **SUGESTÃO DE PARCELAMENTO:** Dividir a ureia de cobertura em **3 aplicações** de ~{ureia_parcela_kg:.0f} kg/ha cada, nos estádios {', '.join(epocas_cobertura)}")
         
         total_sacos_op1 = math.ceil((fontes["MAP"] + fontes["KCl_plantio"] + fontes["Ureia_plantio"] + fontes["KCl_cobertura"] + fontes["Ureia_cobertura"]) * area / 50)
         st.success(f"💰 **Total de sacos Opção 1:** {total_sacos_op1} sacos")
@@ -360,11 +365,14 @@ with r3:
                     sacos_ureia_op2 = math.ceil(ureia_cobertura_op2 * area / 50)
                     st.write(f"📦 Ureia: **{ureia_cobertura_op2:.0f} kg/ha** ({sacos_ureia_op2} sacos)")
                     st.caption(f"  └─ Fornece: {n_cobertura:.0f} kg N")
+                    
+                    if n_cobertura > 0:
+                        ureia_parcela_op2 = (n_parcela / 0.45) if n_parcela > 0 else 0
+                        st.caption(f"  💡 **SUGESTÃO DE PARCELAMENTO:** Dividir a ureia de cobertura em **3 aplicações** de ~{ureia_parcela_op2:.0f} kg/ha cada, nos estádios {', '.join(epocas_cobertura)}")
         
         total_sacos_op2 = sacos_04_20_20 + (sacos_kcl_extra if k2o_cobertura > 0 else 0) + (sacos_ureia_op2 if n_cobertura > 0 else 0)
         st.info(f"💰 **Total de sacos Opção 2:** {total_sacos_op2} sacos")
         
-        # Comparativo de economia
         if total_sacos_op1 < total_sacos_op2:
             economia = total_sacos_op2 - total_sacos_op1
             st.success(f"💎 **ECONOMIA RECOMENDADA:** A Opção 1 economiza {economia} sacos ({(economia/total_sacos_op2)*100:.0f}% menos volume)!")
@@ -399,7 +407,9 @@ with col_check3:
     if cultura == "Milho":
         st.markdown("**🌽 Nitrogênio (Milho)**")
         if n_cobertura > 120:
-            st.warning("[CUIDADO] N em cobertura alto - parcelar em V4 e V6")
+            st.warning("[CUIDADO] N em cobertura alto - parcelar em V4, V6 e V8")
+        elif n_cobertura > 0:
+            st.success(f"[OK] N em cobertura adequado - recomendado parcelar em 3 vezes: {', '.join(epocas_cobertura)}")
         else:
             st.success("[OK] N em cobertura adequado")
         
@@ -486,9 +496,16 @@ def gerar_pdf():
         pdf.cell(190, 7, fix_txt(f" Recomendação de Nitrogênio (N): Total {rec_n:.0f} kg/ha"), ln=True)
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(190, 6, fix_txt(f"  - Aplicação no Plantio: {n_plantio} kg/ha"), ln=True)
-        pdf.cell(190, 6, fix_txt(f"  - Aplicação em Cobertura (V4-V6): {n_cobertura:.0f} kg/ha"), ln=True)
+        pdf.cell(190, 6, fix_txt(f"  - Aplicação em Cobertura Total: {n_cobertura:.0f} kg/ha"), ln=True)
         
-        # Parcelamento do K
+        # Sugestão de parcelamento do N em 3 vezes
+        if n_cobertura > 0:
+            pdf.set_text_color(0, 100, 0)
+            pdf.set_font("Helvetica", "I", 9)
+            pdf.cell(190, 5, fix_txt(f"    *SUGESTÃO DE PARCELAMENTO: Dividir os {n_cobertura:.0f} kg N/ha em 3 aplicações de {n_parcela:.0f} kg N/ha cada, nos estádios V4, V6 e V8*"), ln=True)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("Helvetica", "", 10)
+        
         if k2o_cobertura > 0:
             pdf.cell(190, 6, fix_txt(f" Parcelamento do Potássio (K2O): {k2o_plantio:.0f} kg/ha no plantio + {k2o_cobertura:.0f} kg/ha em cobertura (V4-V6)"), ln=True)
         else:
@@ -536,6 +553,15 @@ def gerar_pdf():
         if fontes["Ureia_cobertura"] > 0:
             pdf.cell(190, 4, fix_txt(f"  - Ureia (45% N): {fontes['Ureia_cobertura']:.0f} kg/ha ({math.ceil(fontes['Ureia_cobertura'] * area / 50)} sacos)"), ln=True)
             pdf.cell(190, 4, fix_txt(f"    Fornece: {n_cobertura:.0f} kg N"), ln=True)
+            
+            # Parcelamento da ureia em cobertura no PDF
+            if n_cobertura > 0:
+                ureia_parcela_kg = (n_parcela / 0.45) if n_parcela > 0 else 0
+                pdf.set_text_color(0, 100, 0)
+                pdf.set_font("Helvetica", "I", 8)
+                pdf.cell(190, 4, fix_txt(f"    *SUGESTÃO DE PARCELAMENTO: Dividir a ureia de cobertura em 3 aplicações de ~{ureia_parcela_kg:.0f} kg/ha cada, nos estádios V4, V6 e V8*"), ln=True)
+                pdf.set_text_color(0, 0, 0)
+                pdf.set_font("Helvetica", "", 9)
     
     total_sacos_op1 = math.ceil((fontes["MAP"] + fontes["KCl_plantio"] + fontes["Ureia_plantio"] + fontes["KCl_cobertura"] + fontes["Ureia_cobertura"]) * area / 50)
     pdf.cell(190, 5, fix_txt(f" Total de sacos Opção 1: {total_sacos_op1} sacos"), ln=True)
@@ -562,11 +588,18 @@ def gerar_pdf():
         sacos_ureia_op2 = math.ceil(ureia_cobertura_op2 * area / 50)
         pdf.cell(190, 4, fix_txt(f"  - Ureia (cobertura): {ureia_cobertura_op2:.0f} kg/ha ({sacos_ureia_op2} sacos)"), ln=True)
         pdf.cell(190, 4, fix_txt(f"    Fornece: {n_cobertura:.0f} kg N"), ln=True)
+        
+        if n_cobertura > 0:
+            ureia_parcela_op2 = (n_parcela / 0.45) if n_parcela > 0 else 0
+            pdf.set_text_color(0, 100, 0)
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.cell(190, 4, fix_txt(f"    *SUGESTÃO DE PARCELAMENTO: Dividir a ureia de cobertura em 3 aplicações de ~{ureia_parcela_op2:.0f} kg/ha cada, nos estádios V4, V6 e V8*"), ln=True)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("Helvetica", "", 9)
     
     total_sacos_op2 = sacos_04_20_20 + (sacos_kcl_extra if k2o_cobertura > 0 else 0) + (sacos_ureia_op2 if n_cobertura > 0 else 0)
     pdf.cell(190, 5, fix_txt(f" Total de sacos Opção 2: {total_sacos_op2} sacos"), ln=True)
     
-    # Comparativo
     if total_sacos_op1 < total_sacos_op2:
         economia = total_sacos_op2 - total_sacos_op1
         pdf.cell(190, 5, fix_txt(f" ECONOMIA: A Opção 1 economiza {economia} sacos ({(economia/total_sacos_op2)*100:.0f}% menos volume)"), ln=True)
@@ -580,7 +613,9 @@ def gerar_pdf():
     
     if cultura == "Milho":
         if n_cobertura > 120:
-            pdf.cell(190, 5, fix_txt(" [CUIDADO] Nitrogênio em cobertura elevado - parcelar em V4 e V6"), ln=True)
+            pdf.cell(190, 5, fix_txt(" [CUIDADO] Nitrogênio em cobertura elevado - parcelar em V4, V6 e V8"), ln=True)
+        elif n_cobertura > 0:
+            pdf.cell(190, 5, fix_txt(f" [OK] Nitrogênio em cobertura adequado - recomenda-se parcelar em 3 vezes: V4, V6 e V8"), ln=True)
         else:
             pdf.cell(190, 5, fix_txt(" [OK] Nitrogênio em cobertura dentro do recomendado"), ln=True)
         
@@ -624,7 +659,7 @@ def gerar_pdf():
     if cultura == "Soja":
         ref_texto = "- Interpretação de Solo: Embrapa Soja.\n- Exportação e Extração: Manual de Adubação e Calagem para o Estado do Paraná (SBCS).\n- Calagem: Método da Elevação da Saturação por Bases (V%)."
     else:
-        ref_texto = "- Interpretação de Solo: Embrapa Milho e Sorgo.\n- Exportação e Extração: IPNI Brasil.\n- Calagem: Método da Elevação da Saturação por Bases (V%)."
+        ref_texto = "- Interpretação de Solo: Embrapa Milho e Sorgo.\n- Exportação e Extração: IPNI Brasil.\n- Calagem: Método da Elevação da Saturação por Bases (V%).\n- Parcelamento do Nitrogênio: Recomendação técnica para milho - 3 aplicações em cobertura (V4, V6, V8)."
         
     pdf.multi_cell(190, 5, fix_txt(ref_texto))
     
