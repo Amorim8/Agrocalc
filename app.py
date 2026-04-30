@@ -159,7 +159,7 @@ if cultura == "Soja":
         
 else:  # Milho - CORRIGIDO
     rec_n = meta_ton * 22
-    n_plantio = min(30, rec_n)  # CORREÇÃO: não força mais do que o total
+    n_plantio = min(30, rec_n)
     n_cobertura = max(0.0, rec_n - n_plantio)
     rec_p = (meta_ton * 12) * (1.3 if nivel_p == "Baixo" else 1.0)
     rec_k = (meta_ton * 18) * (1.2 if nivel_k == "Baixo" else 1.0)
@@ -195,7 +195,7 @@ m3.metric("Status P", nivel_p)
 m4.metric("Status K", nivel_k)
 m5.metric("Alumínio (m%)", f"{m_atual:.1f}%")
 
-# ---------------- FUNÇÃO PARA SUGERIR FONTES CONCENTRADAS (COM DECISÃO AUTOMÁTICA UREIA/SULFATO) ----------------
+# ---------------- FUNÇÃO PARA SUGERIR FONTES CONCENTRADAS ----------------
 def sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cultura):
     if cultura == "Milho":
         k2o_plantio_sug = min(rec_k, LIMITE_K2O_PLANTIO)
@@ -221,11 +221,11 @@ def sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cult
     if n_faltante_plantio <= LIMITE_SEGURO_UREIA_PLANTIO:
         fonte_n_plantio = "Ureia"
         teor_n_fonte = 0.45
-        obs_n_plantio = "✅ Dose segura no sulco (≤20 kg N/ha via ureia)"
+        obs_n_plantio = "Dose segura no sulco (≤20 kg N/ha via ureia)"
     else:
         fonte_n_plantio = "Sulfato de Amônio"
         teor_n_fonte = 0.20
-        obs_n_plantio = f"⚠️ Substituição automática: dose necessária ({n_faltante_plantio:.0f} kg N/ha) excede o limite seguro de 20 kg N/ha via ureia no sulco. Sulfato de amônio é mais seguro para esta dose."
+        obs_n_plantio = f"Substituição automática: dose necessária ({n_faltante_plantio:.0f} kg N/ha) excede o limite seguro de 20 kg N/ha via ureia no sulco. Sulfato de amônio é mais seguro para esta dose."
     
     kg_fonte_plantio = n_faltante_plantio / teor_n_fonte if n_faltante_plantio > 0 else 0
     
@@ -335,10 +335,12 @@ with r3:
                 st.write(f"📦 KCl (60% K2O): **{fontes['KCl_plantio']:.0f} kg/ha** ({math.ceil(fontes['KCl_plantio'] * area / 50)} sacos)")
                 st.caption(f"  └─ Fornece: {fontes['k2o_plantio']:.0f} kg K2O (limite seguro)")
             if fontes["kg_fonte_plantio"] > 0:
-                st.write(f"📦 {fontes['fonte_n_plantio']} ({fontes['teor_n_fonte']*100:.0f}% N): **{fontes['kg_fonte_plantio']:.0f} kg/ha** ({math.ceil(fontes['kg_fonte_plantio'] * area / 50)} sacos)")
+                # Linha quebrada para não ultrapassar borda
+                st.write(f"📦 {fontes['fonte_n_plantio']} ({fontes['teor_n_fonte']*100:.0f}% N):")
+                st.write(f"   **{fontes['kg_fonte_plantio']:.0f} kg/ha** ({math.ceil(fontes['kg_fonte_plantio'] * area / 50)} sacos)")
                 st.caption(f"  └─ Fornece: {fontes['n_faltante_plantio']:.0f} kg N")
                 if "Sulfato" in fontes['fonte_n_plantio']:
-                    st.info(f"  💡 {fontes['obs_n_plantio']}")
+                    st.info(f"  {fontes['obs_n_plantio']}")
         
         with col_op1b:
             if cultura == "Milho" and (fontes["KCl_cobertura"] > 0 or fontes["ureia_cobertura_kg"] > 0):
@@ -352,7 +354,7 @@ with r3:
                     
                     if n_cobertura > 0:
                         ureia_parcela_kg = (n_parcela / 0.45) if n_parcela > 0 else 0
-                        st.caption(f"  💡 **SUGESTÃO DE PARCELAMENTO:** Dividir a ureia de cobertura em **3 aplicações** de ~{ureia_parcela_kg:.0f} kg/ha cada, nos estádios {', '.join(epocas_cobertura)}")
+                        st.caption(f"  💡 SUGESTÃO DE PARCELAMENTO: Dividir a ureia de cobertura em 3 aplicações de ~{ureia_parcela_kg:.0f} kg/ha cada, nos estádios {', '.join(epocas_cobertura)}")
         
         total_sacos_op1 = math.ceil((fontes["MAP"] + fontes["KCl_plantio"] + fontes["kg_fonte_plantio"] + fontes["KCl_cobertura"] + fontes["ureia_cobertura_kg"]) * area / 50)
         st.success(f"💰 **Total de sacos Opção 1:** {total_sacos_op1} sacos")
@@ -385,7 +387,7 @@ with r3:
                     
                     if n_cobertura > 0:
                         ureia_parcela_op2 = (n_parcela / 0.45) if n_parcela > 0 else 0
-                        st.caption(f"  💡 **SUGESTÃO DE PARCELAMENTO:** Dividir a ureia de cobertura em **3 aplicações** de ~{ureia_parcela_op2:.0f} kg/ha cada, nos estádios {', '.join(epocas_cobertura)}")
+                        st.caption(f"  💡 SUGESTÃO DE PARCELAMENTO: Dividir a ureia de cobertura em 3 aplicações de ~{ureia_parcela_op2:.0f} kg/ha cada, nos estádios {', '.join(epocas_cobertura)}")
         
         total_sacos_op2 = sacos_04_20_20 + (sacos_kcl_extra if k2o_cobertura > 0 else 0) + (sacos_ureia_op2 if n_cobertura > 0 else 0)
         st.info(f"💰 **Total de sacos Opção 2:** {total_sacos_op2} sacos")
