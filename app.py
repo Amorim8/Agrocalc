@@ -189,14 +189,14 @@ m3.metric("Status P", nivel_p)
 m4.metric("Status K", nivel_k)
 m5.metric("Alumínio (m%)", f"{m_atual:.1f}%")
 
-# ---------------- FUNÇÃO PARA SUGERIR FONTES CONCENTRADAS COM PARCELAMENTO ----------------
+# ---------------- FUNÇÃO PARA SUGERIR FONTES CONCENTRADAS COM PARCELAMENTO (CORRIGIDA) ----------------
 def sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cultura):
     """Sugere fontes comerciais concentradas com parcelamento do K"""
     
     if cultura == "Milho":
         k2o_plantio_sug = min(rec_k, LIMITE_K2O_PLANTIO)
         k2o_cobertura_sug = max(0, rec_k - k2o_plantio_sug)
-    else:
+    else:  # Soja
         k2o_plantio_sug = rec_k
         k2o_cobertura_sug = 0
     
@@ -204,21 +204,20 @@ def sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cult
     map_kg = rec_p / 0.52 if rec_p > 0 else 0
     n_do_map = map_kg * 0.10
     
+    # SÓ CALCULA UREIA SE FOR MILHO (CORREÇÃO IMPORTANTE!)
+    if cultura == "Milho":
+        n_faltante_plantio = max(0, n_plantio - n_do_map)
+        ureia_plantio_kg = n_faltante_plantio / 0.45 if n_faltante_plantio > 0 else 0
+        ureia_cobertura_kg = n_cobertura / 0.45 if n_cobertura > 0 else 0
+    else:  # Soja - NÃO USA UREIA
+        ureia_plantio_kg = 0
+        ureia_cobertura_kg = 0
+    
     # KCl plantio (60% K2O)
     kcl_plantio_kg = k2o_plantio_sug / 0.60 if k2o_plantio_sug > 0 else 0
     
     # KCl cobertura (60% K2O)
     kcl_cobertura_kg = k2o_cobertura_sug / 0.60 if k2o_cobertura_sug > 0 else 0
-    
-    # Ureia plantio (45% N) - complementa N
-    n_faltante_plantio = max(0, n_plantio - n_do_map)
-    ureia_plantio_kg = n_faltante_plantio / 0.45 if n_faltante_plantio > 0 else 0
-    
-    # Ureia cobertura (45% N) - para milho
-    if cultura == "Milho":
-        ureia_cobertura_kg = n_cobertura / 0.45 if n_cobertura > 0 else 0
-    else:
-        ureia_cobertura_kg = 0
     
     # Superfosfato Triplo (41% P2O5) - opção alternativa
     sft_kg = rec_p / 0.41 if rec_p > 0 else 0
@@ -306,7 +305,11 @@ with r3:
         
         fontes = sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cultura)
         
-        st.markdown("**🌱 OPÇÃO 1: MAP + KCl + Ureia (Recomendada)**")
+        # TÍTULO CORRIGIDO - Não mostra "Ureia" para soja
+        if cultura == "Milho":
+            st.markdown("**🌽 OPÇÃO 1: MAP + KCl + Ureia (Recomendada)**")
+        else:
+            st.markdown("**🌱 OPÇÃO 1: MAP + KCl (Recomendada)**")
         
         col_op1a, col_op1b = st.columns(2)
         
@@ -318,7 +321,8 @@ with r3:
             if fontes["KCl_plantio"] > 0:
                 st.write(f"📦 KCl (60% K2O): **{fontes['KCl_plantio']:.0f} kg/ha** ({math.ceil(fontes['KCl_plantio'] * area / 50)} sacos)")
                 st.caption(f"  └─ Fornece: {fontes['k2o_plantio']:.0f} kg K2O (limite seguro)")
-            if fontes["Ureia_plantio"] > 0:
+            # Só mostra ureia no plantio se for milho E tiver ureia > 0
+            if cultura == "Milho" and fontes["Ureia_plantio"] > 0:
                 st.write(f"📦 Ureia (45% N): **{fontes['Ureia_plantio']:.0f} kg/ha** ({math.ceil(fontes['Ureia_plantio'] * area / 50)} sacos)")
                 st.caption(f"  └─ Fornece: {fontes['Ureia_plantio'] * 0.45:.0f} kg N")
         
@@ -411,7 +415,7 @@ with col_check3:
         st.markdown("**🌱 Nitrogênio (Soja)**")
         st.info("Soja - fixação biológica de N (não necessita adubação nitrogenada)")
 
-# ---------------- 4️⃣ PDF RELATÓRIO ----------------
+# ---------------- 4️⃣ PDF RELATÓRIO (CORRIGIDO) ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
@@ -513,8 +517,13 @@ def gerar_pdf():
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(190, 7, fix_txt(" SUGESTÃO DE FONTES CONCENTRADAS (MAIS ECONÔMICAS E SEGURAS)"), ln=True, fill=True)
     
+    # TÍTULO CORRIGIDO NO PDF
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(190, 6, fix_txt(" Opção 1: MAP + KCl + Ureia (Recomendada)"), ln=True)
+    if cultura == "Milho":
+        pdf.cell(190, 6, fix_txt(" Opção 1: MAP + KCl + Ureia (Recomendada)"), ln=True)
+    else:
+        pdf.cell(190, 6, fix_txt(" Opção 1: MAP + KCl (Recomendada)"), ln=True)
+    
     pdf.set_font("Helvetica", "", 9)
     
     pdf.cell(190, 5, fix_txt(" PLANTIO:"), ln=True)
@@ -524,7 +533,8 @@ def gerar_pdf():
     if fontes["KCl_plantio"] > 0:
         pdf.cell(190, 4, fix_txt(f"  - KCl (60% K2O): {fontes['KCl_plantio']:.0f} kg/ha ({math.ceil(fontes['KCl_plantio'] * area / 50)} sacos)"), ln=True)
         pdf.cell(190, 4, fix_txt(f"    Fornece: {fontes['k2o_plantio']:.0f} kg K2O (limite seguro)"), ln=True)
-    if fontes["Ureia_plantio"] > 0:
+    # Só mostra ureia no PDF se for milho
+    if cultura == "Milho" and fontes["Ureia_plantio"] > 0:
         pdf.cell(190, 4, fix_txt(f"  - Ureia (45% N): {fontes['Ureia_plantio']:.0f} kg/ha ({math.ceil(fontes['Ureia_plantio'] * area / 50)} sacos)"), ln=True)
         pdf.cell(190, 4, fix_txt(f"    Fornece: {fontes['Ureia_plantio'] * 0.45:.0f} kg N"), ln=True)
     
