@@ -231,7 +231,8 @@ def sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cult
         "Ureia_plantio": ureia_plantio_kg,
         "Ureia_cobertura": ureia_cobertura_kg,
         "k2o_plantio": k2o_plantio_sug,
-        "k2o_cobertura": k2o_cobertura_sug
+        "k2o_cobertura": k2o_cobertura_sug,
+        "n_do_map": n_do_map
     }
 
 # ---------------- 3 PRESCRICAO E ADUBO ----------------
@@ -256,7 +257,7 @@ with r3:
         nc3.metric("Cobertura", f"{n_cobertura:.0f} kg")
         
         if k2o_cobertura > 0:
-            st.info(f"**Parcelamento do Potassio:** {k2o_plantio:.0f} kg/ha de K2O no plantio + {k2o_cobertura:.0f} kg/ha de K2O em cobertura (V4-V6)")
+            st.info(f"Parcelamento do Potassio: {k2o_plantio:.0f} kg/ha de K2O no plantio + {k2o_cobertura:.0f} kg/ha de K2O em cobertura (V4-V6)")
     
     st.markdown("### Formulacao Comercial")
     cn, cp, ck = st.columns(3)
@@ -272,42 +273,86 @@ with r3:
         
         p_fornecido = dose_final * f_p / 100
         if p_fornecido > rec_p * 1.2 and rec_p > 0:
-            st.warning(f"EXCESSO DE FOSFORO! Desperdicio de {p_fornecido - rec_p:.0f} kg/ha.")
+            st.warning(f"EXCESSO DE FOSFORO! O formulado {f_n}-{f_p}-{f_k} fornece {p_fornecido:.0f} kg/ha de P2O5, mas a necessidade e de apenas {rec_p:.0f} kg/ha. Desperdicio de {p_fornecido - rec_p:.0f} kg/ha.")
+        
+        if cultura == "Milho" and f_n > 0:
+            n_fornecido = (dose_final * f_n) / 100
+            if n_fornecido > n_plantio * 1.1:
+                st.warning(f"O formulado {f_n}-{f_p}-{f_k} fornece {n_fornecido:.0f} kg/ha de N no plantio, acima dos {n_plantio} kg/ha recomendados.")
+        
+        st.success(f"Dose no plantio: {dose_final:.0f} kg/ha | Total de sacos (50kg): {total_sacos} sacos para a area total")
         
         fontes = sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cultura)
         
         st.markdown("---")
         st.markdown("### SUGESTAO DE FONTES CONCENTRADAS (MAIS ECONOMICAS)")
-        st.markdown("**OPCAO RECOMENDADA: MAP + KCl + Ureia**")
+        st.markdown("OPCAO 1: MAP + KCl + Ureia (Recomendada)")
         
         col_op1a, col_op1b = st.columns(2)
         with col_op1a:
-            st.markdown("**PLANTIO:**")
+            st.markdown("PLANTIO:")
             if fontes["MAP"] > 0:
-                st.write(f"MAP: **{fontes['MAP']:.0f} kg/ha** ({math.ceil(fontes['MAP'] * area / 50)} sacos)")
+                st.write(f"MAP (52% P2O5, 10% N): {fontes['MAP']:.0f} kg/ha ({math.ceil(fontes['MAP'] * area / 50)} sacos)")
             if fontes["KCl_plantio"] > 0:
-                st.write(f"KCl: **{fontes['KCl_plantio']:.0f} kg/ha** ({math.ceil(fontes['KCl_plantio'] * area / 50)} sacos)")
+                st.write(f"KCl (60% K2O): {fontes['KCl_plantio']:.0f} kg/ha ({math.ceil(fontes['KCl_plantio'] * area / 50)} sacos)")
             if fontes["Ureia_plantio"] > 0 and cultura == "Milho":
-                st.write(f"Ureia: **{fontes['Ureia_plantio']:.0f} kg/ha** ({math.ceil(fontes['Ureia_plantio'] * area / 50)} sacos)")
+                st.write(f"Ureia (45% N): {fontes['Ureia_plantio']:.0f} kg/ha ({math.ceil(fontes['Ureia_plantio'] * area / 50)} sacos)")
         
         with col_op1b:
             if cultura == "Milho" and (fontes["KCl_cobertura"] > 0 or fontes["Ureia_cobertura"] > 0):
-                st.markdown("**COBERTURA (V4-V6):**")
+                st.markdown("COBERTURA (V4-V6):")
                 if fontes["KCl_cobertura"] > 0:
-                    st.write(f"KCl: **{fontes['KCl_cobertura']:.0f} kg/ha** ({math.ceil(fontes['KCl_cobertura'] * area / 50)} sacos)")
+                    st.write(f"KCl: {fontes['KCl_cobertura']:.0f} kg/ha ({math.ceil(fontes['KCl_cobertura'] * area / 50)} sacos)")
                 if fontes["Ureia_cobertura"] > 0:
-                    st.write(f"Ureia: **{fontes['Ureia_cobertura']:.0f} kg/ha** ({math.ceil(fontes['Ureia_cobertura'] * area / 50)} sacos)")
+                    st.write(f"Ureia: {fontes['Ureia_cobertura']:.0f} kg/ha ({math.ceil(fontes['Ureia_cobertura'] * area / 50)} sacos)")
+        
+        total_sacos_op1 = math.ceil((fontes["MAP"] + fontes["KCl_plantio"] + fontes["Ureia_plantio"] + fontes["KCl_cobertura"] + fontes["Ureia_cobertura"]) * area / 50)
+        st.success(f"Total de sacos Opcao 1: {total_sacos_op1} sacos")
 
-# ---------------- 4 PDF RELATORIO COMPLETO (SEM PONTOS DE INTERROGACAO) ----------------
+# ---------------- CHECKLIST DE SEGURANCA ----------------
+st.divider()
+st.subheader("Checklist de Seguranca para Aplicacao")
+col_check1, col_check2, col_check3 = st.columns(3)
+
+with col_check1:
+    st.markdown("Calagem")
+    if nc > 5.0:
+        st.error("[ATENCAO] Dose de calcario muito alta - parcelar aplicacao")
+    elif nc > 3.0:
+        st.warning("[CUIDADO] Dose alta - aplicar com antecedencia minima de 90 dias")
+    else:
+        st.success("[OK] Dose dentro do recomendado")
+
+with col_check2:
+    st.markdown("Gessagem")
+    if ng > 2.0:
+        st.error("[ATENCAO] Gessagem elevada - risco de lixiviacao de K e Mg")
+    elif ng > 1.0:
+        st.warning("[CUIDADO] Gessagem moderada - verificar necessidade de Ca e S")
+    else:
+        st.success("[OK] Dose segura")
+
+with col_check3:
+    if cultura == "Milho":
+        st.markdown("Nitrogenio (Milho)")
+        if n_cobertura > 120:
+            st.warning("[CUIDADO] N em cobertura alto - parcelar em V4 e V6")
+        else:
+            st.success("[OK] N em cobertura adequado")
+        
+        if k2o_cobertura > 0:
+            st.info(f"Potassio parcelado: {k2o_plantio:.0f} kg/ha no plantio + {k2o_cobertura:.0f} kg/ha em cobertura")
+    else:
+        st.markdown("Nitrogenio (Soja)")
+        st.info("Soja - fixacao biologica de N (nao necessita adubacao nitrogenada)")
+
+# ---------------- 4 PDF RELATORIO COMPLETO ----------------
 def gerar_pdf():
     pdf = FPDF()
     pdf.add_page()
     def fix_txt(t): 
-        # Remove/substitui caracteres problematicos
-        t = t.replace('•', '-')
-        t = t.replace('°', 'o')
-        t = t.replace('²', '2')
-        t = t.replace('³', '3')
+        t = str(t)
+        # Acentos
         t = t.replace('ç', 'c')
         t = t.replace('ã', 'a')
         t = t.replace('õ', 'o')
@@ -331,10 +376,16 @@ def gerar_pdf():
         t = t.replace('â'.upper(), 'A')
         t = t.replace('ê'.upper(), 'E')
         t = t.replace('ô'.upper(), 'O')
+        # Simbolos
+        t = t.replace('•', '-')
+        t = t.replace('°', 'o')
+        t = t.replace('²', '2')
+        t = t.replace('³', '3')
+        t = t.replace('₅', '5')
+        t = t.replace('₂', '2')
         t = t.replace('?', '')
         t = t.replace('�', '')
-        t = t.replace('_x000d_', '')
-        return str(t).encode('latin-1', 'replace').decode('latin-1')
+        return t.encode('latin-1', 'replace').decode('latin-1')
     
     data_pdf = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
     fontes = sugerir_fontes_concentradas(rec_p, rec_k, n_plantio, n_cobertura, area, cultura)
@@ -424,6 +475,9 @@ def gerar_pdf():
         if fontes["Ureia_cobertura"] > 0:
             pdf.cell(190, 4, fix_txt(f"  - Ureia: {fontes['Ureia_cobertura']:.0f} kg/ha ({math.ceil(fontes['Ureia_cobertura'] * area / 50)} sacos)"), ln=True)
     
+    total_sacos_op1 = math.ceil((fontes["MAP"] + fontes["KCl_plantio"] + fontes["Ureia_plantio"] + fontes["KCl_cobertura"] + fontes["Ureia_cobertura"]) * area / 50)
+    pdf.cell(190, 5, fix_txt(f" Total de sacos Opcao 1: {total_sacos_op1} sacos"), ln=True)
+    
     # MICRONUTRIENTES
     pdf.ln(5)
     pdf.set_fill_color(230, 230, 250)
@@ -432,7 +486,7 @@ def gerar_pdf():
     pdf.set_font("Helvetica", "", 9)
     
     if cultura == "Milho":
-        pdf.multi_cell(190, 5, fix_txt(" - Zinco (Zn): Alta exigenica para milho. Recomenda-se monitoramento e aplicacao de 3-5 kg/ha de Zn via sulfato de zinco se necessario."))
+        pdf.multi_cell(190, 5, fix_txt(" - Zinco (Zn): Alta exigencia para milho. Recomenda-se monitoramento e aplicacao de 3-5 kg/ha de Zn via sulfato de zinco se necessario."))
         pdf.multi_cell(190, 5, fix_txt(" - Boro (B): Importante para formacao de graos. Aplicacao via foliar (0.5-1.0 kg/ha) no pre-florescimento."))
     else:
         pdf.multi_cell(190, 5, fix_txt(" - Zinco (Zn): Essencial para fixacao de nitrogenio. Aplicar 2-3 kg/ha de Zn se nivel estiver baixo."))
