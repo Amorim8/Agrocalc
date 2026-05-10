@@ -390,7 +390,7 @@ def gerar_pdf():
         pdf = FPDF()
         fonte_normal = 'Helvetica'
         fonte_bold = 'Helvetica'
-        st.warning("Fonte DejaVu não encontrada. O PDF pode não exibir acentos corretamente.")
+        st.warning("Baixar.")
     
     pdf.add_page()
     
