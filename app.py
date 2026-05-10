@@ -390,7 +390,6 @@ def gerar_pdf():
         pdf = FPDF()
         fonte_normal = 'Helvetica'
         fonte_bold = 'Helvetica'
-        st.warning("Baixar.")
     
     pdf.add_page()
     
