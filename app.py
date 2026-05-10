@@ -1,14 +1,13 @@
 import streamlit as st
 from fpdf import FPDF
 import math
-from datetime import datetime, timedelta
 import os
+import urllib.request
+from datetime import datetime, timedelta
 
 # ---------------- CONFIGURAR FONTE COM ACENTOS PARA PDF ----------------
-# Baixar a fonte DejaVu se não existir
 def baixar_fonte_dejavu():
     """Baixa a fonte DejaVu que suporta acentos"""
-    import urllib.request
     fontes = {
         'DejaVuSans.ttf': 'https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf',
         'DejaVuSans-Bold.ttf': 'https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf'
@@ -441,7 +440,7 @@ def gerar_pdf():
         pdf.multi_cell(190, 5, txt(f" - Fósforo (P2O5): Necessidade de {rec_p:.0f} kg/ha considerando nível {'baixo' if nivel_p=='Baixo' else 'médio' if nivel_p=='Médio' else 'bom'} do solo e fator de correção específico para a cultura."))
         pdf.multi_cell(190, 5, txt(f" - Potássio (K2O): Parcelamento de {k2o_plantio:.0f} kg/ha no plantio e {k2o_cobertura:.0f} kg/ha em cobertura para reduzir risco de salinidade em solo {classe_txt.lower()} e melhorar aproveitamento."))
     else:
-        pdf.multi_cell(190, 5, txt(f" - Nitrogênio (N): Soja utiliza fixação biológica com Bradyrhizobium. Recomenda-se inoculação das sementes."))
+        pdf.multi_cell(190, 5, txt(f" - Nitrogênio (N): Soja utiliza fixação biológica com Bradyrhizobium. Recomenda-se inoculação das sementes. NÃO necessita adubação nitrogenada."))
         pdf.multi_cell(190, 5, txt(f" - Fósforo (P2O5): Dose de {rec_p:.0f} kg/ha considerando nível {'baixo' if nivel_p=='Baixo' else 'médio' if nivel_p=='Médio' else 'bom'} do solo."))
         pdf.multi_cell(190, 5, txt(f" - Potássio (K2O): Dose de {rec_k:.0f} kg/ha para reposição da exportação pela cultura."))
     
@@ -520,21 +519,22 @@ def gerar_pdf():
         pdf.cell(190, 5, txt(" Plantio: MAP + KCl (sulco de plantio) + inoculação das sementes"), ln=True)
         pdf.cell(190, 5, txt(" R1 (início da floração): Aplicação foliar de Boro (0.5-1.0 kg/ha)"), ln=True)
     
-    # MANEJO DE PERDAS
-    pdf.ln(5)
-    pdf.set_fill_color(200, 220, 255)
-    pdf.set_font(fonte_bold, '', 10)
-    pdf.cell(190, 7, txt(" 7. MANEJO DE PERDAS DE NITROGÊNIO"), ln=True, fill=True)
-    pdf.set_font(fonte_normal, '', 9)
-    pdf.multi_cell(190, 5, txt(" - Ureia: Aplicar antes de chuva leve (5-15mm) ou incorporar ao solo para evitar perdas por volatilização."))
-    pdf.multi_cell(190, 5, txt(" - Parcelamento: Divisão da adubação nitrogenada reduz perdas e aumenta eficiência do fertilizante."))
-    pdf.multi_cell(190, 5, txt(" - Condições: Evitar aplicar em solo seco ou com temperatura muito alta (acima de 30°C)."))
+    # MANEJO DE PERDAS DE NITROGÊNIO - SOMENTE PARA MILHO
+    if cultura == "Milho":
+        pdf.ln(5)
+        pdf.set_fill_color(200, 220, 255)
+        pdf.set_font(fonte_bold, '', 10)
+        pdf.cell(190, 7, txt(" 7. MANEJO DE PERDAS DE NITROGÊNIO"), ln=True, fill=True)
+        pdf.set_font(fonte_normal, '', 9)
+        pdf.multi_cell(190, 5, txt(" - Ureia: Aplicar antes de chuva leve (5-15mm) ou incorporar ao solo para evitar perdas por volatilização."))
+        pdf.multi_cell(190, 5, txt(" - Parcelamento: Divisão da adubação nitrogenada reduz perdas e aumenta eficiência do fertilizante."))
+        pdf.multi_cell(190, 5, txt(" - Condições: Evitar aplicar em solo seco ou com temperatura muito alta (acima de 30°C)."))
     
     # RECOMENDAÇÕES COMPLEMENTARES
     pdf.ln(5)
     pdf.set_fill_color(255, 220, 220)
     pdf.set_font(fonte_bold, '', 10)
-    pdf.cell(190, 7, txt(" 8. RECOMENDAÇÕES AGRONÔMICAS COMPLEMENTARES"), ln=True, fill=True)
+    pdf.cell(190, 7, txt(" 7. RECOMENDAÇÕES AGRONÔMICAS COMPLEMENTARES"), ln=True, fill=True)
     pdf.set_font(fonte_normal, '', 9)
     
     recomendacoes = [
@@ -553,7 +553,7 @@ def gerar_pdf():
     pdf.ln(5)
     pdf.set_fill_color(255, 235, 200)
     pdf.set_font(fonte_bold, '', 10)
-    pdf.cell(190, 7, txt(" 9. CHECKLIST DE SEGURANÇA PARA APLICAÇÃO"), ln=True, fill=True)
+    pdf.cell(190, 7, txt(" 8. CHECKLIST DE SEGURANÇA PARA APLICAÇÃO"), ln=True, fill=True)
     pdf.set_font(fonte_normal, '', 9)
     
     if cultura == "Milho":
@@ -565,7 +565,7 @@ def gerar_pdf():
         if k2o_cobertura > 0:
             pdf.cell(190, 5, txt(f" [INFO] Potássio parcelado: {k2o_plantio:.0f} kg/ha no plantio + {k2o_cobertura:.0f} kg/ha em cobertura (evita salinidade)"), ln=True)
     else:
-        pdf.cell(190, 5, txt(" [INFO] Soja - fixação biológica de N (inoculação obrigatória)"), ln=True)
+        pdf.cell(190, 5, txt(" [INFO] Soja - fixação biológica de N (inoculação obrigatória) - NÃO aplicar nitrogênio"), ln=True)
     
     if ng > 0:
         if ng <= 2.0:
@@ -603,7 +603,7 @@ def gerar_pdf():
     pdf.set_text_color(50, 50, 50)
     
     if cultura == "Soja":
-        ref_texto = "- Interpretação de Solo: Embrapa Soja.\n- Exportação e Extração: Manual de Adubação e Calagem para o Estado do Paraná (SBCS).\n- Calagem: Método da Elevação da Saturação por Bases (V%).\n- Micronutrientes: IPNI Brasil.\n- Manejo de Perdas: Embrapa Milho e Sorgo."
+        ref_texto = "- Interpretação de Solo: Embrapa Soja.\n- Exportação e Extração: Manual de Adubação e Calagem para o Estado do Paraná (SBCS).\n- Calagem: Método da Elevação da Saturação por Bases (V%).\n- Micronutrientes: IPNI Brasil."
     else:
         ref_texto = "- Interpretação de Solo: Embrapa Milho e Sorgo.\n- Exportação e Extração: IPNI Brasil.\n- Calagem: Método da Elevação da Saturação por Bases (V%).\n- Micronutrientes: IPNI Brasil.\n- Manejo de Perdas: Embrapa Milho e Sorgo."
     
