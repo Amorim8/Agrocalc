@@ -614,7 +614,7 @@ def gerar_pdf():
 # ---------------- BOTÃO ----------------
 st.divider()
 st.warning("⚠️ **Aviso:** Esta ferramenta é um auxílio à decisão. Sempre consulte um engenheiro agrônomo antes da aplicação.")
-if st.button("📄 GERAR RELATÓRIO PROFISSIONAL"):
+if st.button("📄 GERAR RELATÓRIO"):
     pdf_bytes = gerar_pdf()
     st.download_button("⬇️ Baixar Relatório", pdf_bytes, file_name=f"Relatorio_{nome_para_arquivo}.pdf")
 
