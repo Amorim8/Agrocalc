@@ -7,6 +7,7 @@ import os
 import json
 import math
 import urllib.request
+import urllib.parse
 import pandas as pd
 from datetime import datetime, timedelta
 from contextlib import contextmanager
@@ -24,7 +25,7 @@ os.makedirs(DB_DIR, exist_ok=True)
 os.makedirs(PDF_DIR, exist_ok=True)
 os.makedirs(FONT_DIR, exist_ok=True)
 
-SENHA_MESTRE = "@Lipe1928"  # Usada para criar o admin inicial
+SENHA_MESTRE = "@Lipe1928"
 
 # ============================================================
 # BANCO DE DADOS
@@ -338,7 +339,8 @@ def salvar_prescricao(user_id, dados, resultados, pdf_bytes=None, cliente_id=Non
 def listar_prescricoes(user_id, limite=100):
     with get_conn() as conn:
         rows = conn.execute('''
-            SELECT id, cliente, fazenda, talhao, cultura, area, meta_ton, criado_em, pdf_path
+            SELECT id, cliente, fazenda, talhao, cultura, area, meta_ton, criado_em, pdf_path,
+                   municipio, estado, dados_solo, resultados
             FROM prescricoes WHERE user_id = ?
             ORDER BY criado_em DESC LIMIT ?
         ''', (user_id, limite)).fetchall()
@@ -519,6 +521,84 @@ def calcular_tudo(dados):
         "k2o_plantio": k2o_plantio, "k2o_cobertura": k2o_cobertura,
         "fontes": fontes, "alertas": alertas,
     }
+
+
+# ============================================================
+# WHATSAPP - HELPERS
+# ============================================================
+def gerar_mensagem_whatsapp(entrada, calc, nome_consultor=""):
+    """Gera mensagem formatada para envio por WhatsApp."""
+    cliente = entrada.get('cliente', 'Cliente') or 'Cliente'
+    fazenda = entrada.get('fazenda', '')
+    talhao = entrada.get('talhao', '')
+    cultura = entrada.get('cultura', '')
+    area = entrada.get('area', 0)
+    meta = entrada.get('meta_ton', 0)
+
+    msg = f"🌿 *RECOMENDAÇÃO AGRONÔMICA*\n"
+    msg += f"━━━━━━━━━━━━━━━━━━━━\n\n"
+    msg += f"👨‍🌾 *Cliente:* {cliente}\n"
+    if fazenda:
+        msg += f"🏠 *Fazenda:* {fazenda}\n"
+    if talhao:
+        msg += f"📍 *Talhão:* {talhao}\n"
+    msg += f"🌱 *Cultura:* {cultura}\n"
+    msg += f"📏 *Área:* {area:.2f} ha\n"
+    msg += f"🎯 *Meta:* {meta} t/ha\n\n"
+
+    msg += f"━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"🪨 *CORREÇÃO DO SOLO*\n"
+    msg += f"• Calagem: *{calc['nc']:.2f} t/ha* (Total: {calc['total_calc']:.2f} t)\n"
+    msg += f"• Gessagem: *{calc['ng']:.2f} t/ha* (Total: {calc['total_gesso']:.2f} t)\n\n"
+
+    msg += f"━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"💊 *ADUBAÇÃO*\n"
+
+    if cultura == "Milho":
+        msg += f"• N: *{calc['rec_n']:.0f} kg/ha* "
+        msg += f"(Plantio: {calc['n_plantio']} | Cobertura: {calc['n_cobertura']:.0f})\n"
+
+    msg += f"• P2O5: *{calc['rec_p']:.0f} kg/ha*\n"
+    msg += f"• K2O: *{calc['rec_k']:.0f} kg/ha*\n\n"
+
+    fontes = calc['fontes']
+    msg += f"━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"🛒 *FONTES SUGERIDAS (plantio)*\n"
+    if fontes['MAP'] > 0:
+        msg += f"• MAP: {fontes['MAP']:.0f} kg/ha\n"
+    if fontes['KCl_plantio'] > 0:
+        msg += f"• KCl: {fontes['KCl_plantio']:.0f} kg/ha\n"
+    if fontes['Ureia_plantio'] > 0 and cultura == "Milho":
+        msg += f"• Ureia: {fontes['Ureia_plantio']:.0f} kg/ha\n"
+
+    if cultura == "Milho" and (fontes['KCl_cobertura'] > 0 or fontes['Ureia_cobertura'] > 0):
+        msg += f"\n🌿 *COBERTURA (V4-V6)*\n"
+        if fontes['KCl_cobertura'] > 0:
+            msg += f"• KCl: {fontes['KCl_cobertura']:.0f} kg/ha\n"
+        if fontes['Ureia_cobertura'] > 0:
+            msg += f"• Ureia: {fontes['Ureia_cobertura']:.0f} kg/ha\n"
+
+    msg += f"\n━━━━━━━━━━━━━━━━━━━━\n"
+    if nome_consultor:
+        msg += f"👨‍🔬 *{nome_consultor}*\n"
+    msg += f"📄 _Relatório completo em PDF será enviado em anexo._"
+
+    return msg
+
+
+def gerar_link_whatsapp(telefone, mensagem):
+    """Gera link wa.me com a mensagem pré-preenchida."""
+    telefone_limpo = ''.join(filter(str.isdigit, telefone or ''))
+
+    if telefone_limpo and not telefone_limpo.startswith('55'):
+        telefone_limpo = '55' + telefone_limpo
+
+    mensagem_encoded = urllib.parse.quote(mensagem)
+
+    if telefone_limpo:
+        return f"https://wa.me/{telefone_limpo}?text={mensagem_encoded}"
+    else:
+        return f"https://wa.me/?text={mensagem_encoded}"
 
 
 # ============================================================
@@ -719,7 +799,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
     pdf.multi_cell(190, 4, "Esta recomendação baseia-se exclusivamente nos dados fornecidos. "
                             "O sucesso da cultura depende de fatores climáticos, fitossanitários e do manejo correto no campo.")
 
-    # Referências
     pdf.ln(5)
     pdf.set_font(fonte, bold, 10)
     pdf.set_text_color(34, 139, 34)
@@ -740,7 +819,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
 # ============================================================
 st.set_page_config(page_title="Felipe Amorim | Consultoria", layout="wide", page_icon="🌿")
 
-# CSS
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
@@ -764,14 +842,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Inicializa banco
 init_db()
-
-# Fuso horário
 data_hoje = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
 
 # ============================================================
-# TELA DE LOGIN / CADASTRO
+# LOGIN / CADASTRO
 # ============================================================
 if 'usuario' not in st.session_state:
     st.session_state['usuario'] = None
@@ -784,39 +859,129 @@ def tela_login():
 
     tab_login, tab_cadastro = st.tabs(["🔐 Login", "📝 Criar Conta"])
 
+    # ==================== LOGIN ====================
     with tab_login:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
+            st.subheader("Acesse sua conta")
             email = st.text_input("E-mail", key="login_email")
             senha = st.text_input("Senha", type="password", key="login_senha")
-            if st.button("Entrar", key="btn_login"):
-                user, erro = autenticar(email, senha)
-                if user:
-                    st.session_state['usuario'] = user
-                    st.rerun()
-                else:
-                    st.error(erro)
 
+            if st.button("Entrar", key="btn_login", use_container_width=True):
+                if not email or not senha:
+                    st.error("Preencha e-mail e senha.")
+                else:
+                    user, erro = autenticar(email, senha)
+                    if user:
+                        st.session_state['usuario'] = user
+                        st.rerun()
+                    else:
+                        st.error(erro)
+
+    # ==================== CADASTRO ====================
     with tab_cadastro:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            nome = st.text_input("Nome completo", key="cad_nome")
-            email_c = st.text_input("E-mail", key="cad_email")
-            telefone = st.text_input("Telefone (opcional)", key="cad_tel")
-            crea = st.text_input("CREA (opcional)", key="cad_crea")
-            senha_c = st.text_input("Senha (mín. 8 caracteres, 1 letra e 1 número)", type="password", key="cad_senha")
-            senha_c2 = st.text_input("Confirme a senha", type="password", key="cad_senha2")
-            aceite = st.checkbox(
-                "Li e aceito a Política de Privacidade e o tratamento dos meus dados conforme a LGPD."
+            st.subheader("Criar nova conta")
+
+            nome = st.text_input("Nome completo *", key="cad_nome")
+            email_c = st.text_input("E-mail *", key="cad_email")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                telefone = st.text_input("Telefone (opcional)", key="cad_tel")
+            with col_b:
+                crea = st.text_input("CREA (opcional)", key="cad_crea")
+
+            senha_c = st.text_input(
+                "Senha * (mín. 8 caracteres, 1 letra e 1 número)",
+                type="password", key="cad_senha"
+            )
+            senha_c2 = st.text_input(
+                "Confirme a senha *",
+                type="password", key="cad_senha2"
             )
 
-            if st.button("Criar conta", key="btn_cadastro"):
-                if senha_c != senha_c2:
-                    st.error("As senhas não coincidem.")
+            aceite = st.checkbox(
+                "Li e aceito a **Política de Privacidade** e o tratamento dos meus dados conforme a **LGPD**.",
+                key="aceite_lgpd"
+            )
+
+            with st.expander("📄 Ver Política de Privacidade completa"):
+                st.markdown("""
+### 🔒 Política de Privacidade e Termos de Uso
+
+**Última atualização:** """ + (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y') + """
+
+#### 1. Quem somos
+Este sistema é uma ferramenta de auxílio à decisão agronômica, desenvolvida para engenheiros agrônomos e consultores do setor agrícola.
+
+#### 2. Quais dados coletamos
+- **Dados de identificação:** nome, e-mail, telefone, CREA (opcional)
+- **Dados de uso:** clientes cadastrados, talhões, análises de solo, prescrições geradas
+- **Dados técnicos:** data e hora de acesso, ações realizadas no sistema (logs de auditoria)
+
+#### 3. Como usamos seus dados
+- Exclusivamente para o funcionamento do sistema
+- Para gerar relatórios técnicos personalizados
+- Para manter seu histórico de prescrições
+- **NÃO compartilhamos seus dados com terceiros**
+- **NÃO usamos seus dados para publicidade**
+
+#### 4. Onde os dados ficam armazenados
+Todos os dados ficam armazenados **localmente no servidor onde o sistema roda**. Não enviamos dados para nuvem ou terceiros.
+
+#### 5. Seus direitos (LGPD - Lei 13.709/2018)
+Você tem direito a:
+- ✅ **Acessar** todos os seus dados a qualquer momento
+- ✅ **Corrigir** informações incorretas no seu perfil
+- ✅ **Excluir** sua conta e todos os dados associados (irreversível)
+- ✅ **Portabilidade:** baixar seus dados em formato PDF/Excel
+- ✅ **Revogar consentimento** a qualquer momento
+
+#### 6. Segurança
+- Senhas são criptografadas com **PBKDF2 + SHA-256** (100.000 iterações)
+- Sessões são protegidas por token
+- Logs de auditoria registram todas as ações importantes
+
+#### 7. Como exercer seus direitos
+- **Acessar dados:** pela página "Meu Perfil"
+- **Alterar dados:** pela página "Meu Perfil"
+- **Excluir conta:** em "Meu Perfil" → aba "LGPD"
+- **Dúvidas:** entre em contato com o administrador do sistema
+
+#### 8. Retenção de dados
+Seus dados são mantidos enquanto sua conta estiver ativa. Ao excluir a conta, **todos os dados são permanentemente removidos** em até 24 horas.
+
+#### 9. Alterações nesta política
+Podemos atualizar esta política. Mudanças significativas serão comunicadas por e-mail.
+
+---
+
+**Ao marcar a caixa de aceite, você declara que leu, entendeu e concorda com os termos acima.**
+                """)
+
+            st.write("")
+
+            if st.button("✅ Criar conta", key="btn_cadastro", use_container_width=True):
+                if not nome or not email_c or not senha_c:
+                    st.error("⚠️ Preencha todos os campos obrigatórios (*).")
+                elif senha_c != senha_c2:
+                    st.error("⚠️ As senhas não coincidem.")
+                elif not aceite:
+                    st.error("⚠️ Você precisa aceitar a Política de Privacidade e a LGPD.")
                 else:
                     ok, msg = cadastrar_usuario(nome, email_c, senha_c, telefone, crea, aceite)
                     if ok:
-                        st.success(msg + " Faça login para continuar.")
+                        # Login automático após cadastro
+                        user, erro_login = autenticar(email_c, senha_c)
+                        if user:
+                            st.session_state['usuario'] = user
+                            st.success("✅ Conta criada! Bem-vindo(a)!")
+                            st.rerun()
+                        else:
+                            st.success(msg)
+                            st.info("👉 Faça login na aba **🔐 Login** para continuar.")
                     else:
                         st.error(msg)
 
@@ -827,11 +992,10 @@ if st.session_state['usuario'] is None:
 
 
 # ============================================================
-# APP PRINCIPAL (AUTENTICADO)
+# APP PRINCIPAL
 # ============================================================
 usuario = st.session_state['usuario']
 
-# Sidebar - Navegação
 with st.sidebar:
     st.markdown(f"<h3 style='text-align:center;'>👤 {usuario['nome']}</h3>", unsafe_allow_html=True)
     st.caption(f"Plano: **{usuario['plano'].upper()}**")
@@ -856,7 +1020,6 @@ if pagina == "🧮 Nova Prescrição":
     st.title("🧮 Nova Prescrição Agronômica")
     st.caption(f"**Consultor:** {usuario['nome']} | **Data:** {data_hoje}")
 
-    # Carrega clientes para seleção rápida
     clientes = listar_clientes(usuario['id'])
     cliente_sel_id = None
     talhao_sel_id = None
@@ -874,7 +1037,6 @@ if pagina == "🧮 Nova Prescrição":
                     if talhao_escolhido != "-- Novo talhão --":
                         talhao_sel_id = next(t['id'] for t in talhoes if t['nome'] == talhao_escolhido)
 
-    # ===== DADOS DO CLIENTE =====
     st.subheader("📍 Dados do Cliente e Área")
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -903,7 +1065,6 @@ if pagina == "🧮 Nova Prescrição":
 
     nome_para_arquivo = nome_cliente.replace(" ", "_") if nome_cliente else "Cliente"
 
-    # ===== ANÁLISE DE SOLO =====
     st.divider()
     st.subheader("1️⃣ Análise de Solo (Química e Física Completa)")
 
@@ -934,7 +1095,6 @@ if pagina == "🧮 Nova Prescrição":
     with col_m3:
         cu_solo = st.number_input("Cobre (mg/dm³)", 0.0, value=1.0)
 
-    # ===== CALCULAR =====
     dados_entrada = {
         "cliente": nome_cliente, "fazenda": fazenda, "talhao": talhao,
         "municipio": municipio, "estado": estado,
@@ -959,16 +1119,12 @@ if pagina == "🧮 Nova Prescrição":
 
     calc = calcular_tudo(calc_input)
 
-    # Alertas
     for a in calc['alertas']:
         if a['tipo'] == 'warning':
             st.warning(a['msg'])
         elif a['tipo'] == 'info':
             st.info(a['msg'])
-        else:
-            st.error(a['msg'])
 
-    # ===== DASHBOARD =====
     st.divider()
     st.subheader("2️⃣ Diagnóstico e Metas")
     m1, m2, m3, m4, m5 = st.columns(5)
@@ -978,7 +1134,6 @@ if pagina == "🧮 Nova Prescrição":
     m4.metric("Status K", calc['nivel_k'])
     m5.metric("Alumínio (m%)", f"{calc['m_atual']:.1f}%")
 
-    # ===== PRESCRIÇÃO =====
     st.divider()
     st.subheader("3️⃣ Planejamento de Fertilizantes e Corretivos")
 
@@ -1022,7 +1177,6 @@ if pagina == "🧮 Nova Prescrição":
 
             st.success(f"**Dose plantio:** {dose_final:.0f} kg/ha | **Total:** {total_sacos} sacos (50kg)")
 
-    # ===== FONTES SUGERIDAS =====
     st.markdown("---")
     st.markdown("### 💰 Sugestão de Fontes Concentradas")
     fontes = calc['fontes']
@@ -1054,7 +1208,6 @@ if pagina == "🧮 Nova Prescrição":
     )
     st.success(f"💰 **Total de sacos (Opção recomendada):** {total_sacos_op1} sacos")
 
-    # ===== CHECKLIST =====
     st.divider()
     st.subheader("✅ Checklist de Segurança")
     ck1, ck2, ck3 = st.columns(3)
@@ -1084,7 +1237,49 @@ if pagina == "🧮 Nova Prescrição":
         else:
             st.info("🌱 Soja: fixação biológica (sem N)")
 
-    # ===== GERAR PDF =====
+    # ============================================================
+    # 📱 ENVIAR POR WHATSAPP
+    # ============================================================
+    st.divider()
+    st.subheader("📱 Enviar Recomendação por WhatsApp")
+
+    with st.expander("💬 Compartilhar resumo com o cliente", expanded=False):
+        st.caption("📌 Digite o número do cliente (com DDD) ou deixe em branco para escolher o contato no WhatsApp.")
+
+        telefone_cliente = st.text_input(
+            "📞 Telefone (ex: 11987654321)",
+            placeholder="Deixe em branco para escolher manualmente",
+            key="wpp_tel"
+        )
+
+        msg_whats = gerar_mensagem_whatsapp(
+            dados_entrada, calc,
+            nome_consultor=usuario['nome']
+        )
+        link_whats = gerar_link_whatsapp(telefone_cliente, msg_whats)
+
+        st.markdown("**📄 Prévia da mensagem:**")
+        st.text_area(
+            "Mensagem:",
+            value=msg_whats,
+            height=320,
+            key="wpp_preview",
+            label_visibility="collapsed"
+        )
+
+        bcol1, bcol2 = st.columns(2)
+        with bcol1:
+            st.link_button(
+                "📱 Abrir no WhatsApp",
+                link_whats,
+                use_container_width=True
+            )
+        with bcol2:
+            st.caption("💡 **Dica:** Baixe o PDF abaixo e anexe na conversa.")
+
+    # ============================================================
+    # GERAR PDF
+    # ============================================================
     st.divider()
     st.warning("⚠️ Esta ferramenta é um auxílio à decisão. Consulte um engenheiro agrônomo antes da aplicação.")
 
@@ -1096,7 +1291,6 @@ if pagina == "🧮 Nova Prescrição":
             usuario_crea=perfil.get('crea') or ""
         )
 
-        # Salva no banco automaticamente
         presc_id = salvar_prescricao(
             usuario['id'], dados_entrada, calc, pdf_bytes,
             cliente_id=cliente_sel_id, talhao_id=talhao_sel_id
@@ -1150,9 +1344,15 @@ elif pagina == "📊 Meu Histórico":
                     st.markdown(f"**Data:** {p['criado_em']}")
 
                     with st.expander("📋 Ver dados do solo"):
-                        st.json(json.loads(p['dados_solo']))
+                        try:
+                            st.json(json.loads(p['dados_solo']) if isinstance(p['dados_solo'], str) else p['dados_solo'])
+                        except Exception:
+                            st.write(p['dados_solo'])
                     with st.expander("📊 Ver resultados calculados"):
-                        st.json(json.loads(p['resultados']))
+                        try:
+                            st.json(json.loads(p['resultados']) if isinstance(p['resultados'], str) else p['resultados'])
+                        except Exception:
+                            st.write(p['resultados'])
 
                 with col2:
                     if p['pdf_path'] and os.path.exists(p['pdf_path']):
@@ -1167,6 +1367,45 @@ elif pagina == "📊 Meu Histórico":
                     else:
                         st.warning("PDF não encontrado.")
 
+                # Reenviar por WhatsApp
+                st.markdown("---")
+                st.markdown("**📱 Reenviar por WhatsApp**")
+
+                try:
+                    dados_solo_rec = json.loads(p['dados_solo']) if isinstance(p['dados_solo'], str) else p['dados_solo']
+                    resultados_rec = json.loads(p['resultados']) if isinstance(p['resultados'], str) else p['resultados']
+                except Exception:
+                    dados_solo_rec = {}
+                    resultados_rec = {}
+
+                entrada_rec = {
+                    "cliente": p['cliente'], "fazenda": p['fazenda'],
+                    "talhao": p['talhao'], "municipio": p['municipio'],
+                    "estado": p['estado'], "cultura": p['cultura'],
+                    "area": p['area'], "meta_ton": p['meta_ton'],
+                    "solo": dados_solo_rec,
+                }
+
+                tel_hist = st.text_input(
+                    "Telefone:",
+                    placeholder="11987654321",
+                    key=f"wpp_hist_{id_sel}"
+                )
+
+                msg_hist = gerar_mensagem_whatsapp(
+                    entrada_rec, resultados_rec,
+                    nome_consultor=usuario['nome']
+                )
+                link_hist = gerar_link_whatsapp(tel_hist, msg_hist)
+
+                st.link_button(
+                    "📱 Enviar por WhatsApp",
+                    link_hist,
+                    use_container_width=True,
+                    key=f"wpp_btn_{id_sel}"
+                )
+                st.caption("💡 Baixe o PDF acima e anexe na conversa.")
+
                 if st.button(f"🗑️ Excluir prescrição #{id_sel}"):
                     deletar_prescricao(id_sel, usuario['id'])
                     registrar_log(usuario['id'], "deletar_prescricao", f"ID {id_sel}")
@@ -1175,7 +1414,7 @@ elif pagina == "📊 Meu Histórico":
 
 
 # ============================================================
-# PÁGINA: CLIENTES E TALHÕES
+# PÁGINA: CLIENTES
 # ============================================================
 elif pagina == "👥 Clientes e Talhões":
     st.title("👥 Gerenciar Clientes e Talhões")
@@ -1308,6 +1547,5 @@ elif pagina == "⚙️ Meu Perfil":
                 st.error("Digite EXCLUIR para confirmar.")
 
 
-# Rodapé
 st.divider()
 st.caption(f"🌿 Felipe Amorim | Consultoria Agronômica — © {datetime.now().year}")
