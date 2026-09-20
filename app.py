@@ -7,7 +7,6 @@ import os
 import json
 import math
 import urllib.request
-import urllib.parse
 import pandas as pd
 from datetime import datetime, timedelta
 from contextlib import contextmanager
@@ -522,6 +521,43 @@ def calcular_tudo(dados):
         "fontes": fontes, "alertas": alertas,
     }
 
+
+# ============================================================
+# FONTES PARA PDF
+# ============================================================
+FONT_REGULAR = os.path.join(FONT_DIR, "DejaVuSans.ttf")
+FONT_BOLD = os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf")
+
+
+def baixar_fontes():
+    urls = {
+        FONT_REGULAR: "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf",
+        FONT_BOLD: "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf",
+    }
+    for path, url in urls.items():
+        if not os.path.exists(path):
+            try:
+                urllib.request.urlretrieve(url, path)
+            except Exception:
+                pass
+
+
+try:
+    baixar_fontes()
+except Exception:
+    pass
+
+
+class PDFComAcentos(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.tem_dejavu = os.path.exists(FONT_REGULAR)
+        if self.tem_dejavu:
+            self.add_font('DejaVu', '', FONT_REGULAR, uni=True)
+            if os.path.exists(FONT_BOLD):
+                self.add_font('DejaVu', 'B', FONT_BOLD, uni=True)
+
+
 # ============================================================
 # GERAÇÃO DE PDF
 # ============================================================
@@ -858,7 +894,6 @@ Podemos atualizar esta política. Mudanças significativas serão comunicadas po
                 else:
                     ok, msg = cadastrar_usuario(nome, email_c, senha_c, telefone, crea, aceite)
                     if ok:
-                        # Login automático após cadastro
                         user, erro_login = autenticar(email_c, senha_c)
                         if user:
                             st.session_state['usuario'] = user
@@ -1123,46 +1158,6 @@ if pagina == "🧮 Nova Prescrição":
             st.info("🌱 Soja: fixação biológica (sem N)")
 
     # ============================================================
-    # 📱 ENVIAR POR WHATSAPP
-    # ============================================================
-    st.divider()
-    st.subheader("📱 Enviar Recomendação por WhatsApp")
-
-    with st.expander("💬 Compartilhar resumo com o cliente", expanded=False):
-        st.caption("📌 Digite o número do cliente (com DDD) ou deixe em branco para escolher o contato no WhatsApp.")
-
-        telefone_cliente = st.text_input(
-            "📞 Telefone (ex: 11987654321)",
-            placeholder="Deixe em branco para escolher manualmente",
-            key="wpp_tel"
-        )
-
-        msg_whats = gerar_mensagem_whatsapp(
-            dados_entrada, calc,
-            nome_consultor=usuario['nome']
-        )
-        link_whats = gerar_link_whatsapp(telefone_cliente, msg_whats)
-
-        st.markdown("**📄 Prévia da mensagem:**")
-        st.text_area(
-            "Mensagem:",
-            value=msg_whats,
-            height=320,
-            key="wpp_preview",
-            label_visibility="collapsed"
-        )
-
-        bcol1, bcol2 = st.columns(2)
-        with bcol1:
-            st.link_button(
-                "📱 Abrir no WhatsApp",
-                link_whats,
-                use_container_width=True
-            )
-        with bcol2:
-            st.caption("💡 **Dica:** Baixe o PDF abaixo e anexe na conversa.")
-
-    # ============================================================
     # GERAR PDF
     # ============================================================
     st.divider()
@@ -1251,45 +1246,6 @@ elif pagina == "📊 Meu Histórico":
                             )
                     else:
                         st.warning("PDF não encontrado.")
-
-                # Reenviar por WhatsApp
-                st.markdown("---")
-                st.markdown("**📱 Reenviar por WhatsApp**")
-
-                try:
-                    dados_solo_rec = json.loads(p['dados_solo']) if isinstance(p['dados_solo'], str) else p['dados_solo']
-                    resultados_rec = json.loads(p['resultados']) if isinstance(p['resultados'], str) else p['resultados']
-                except Exception:
-                    dados_solo_rec = {}
-                    resultados_rec = {}
-
-                entrada_rec = {
-                    "cliente": p['cliente'], "fazenda": p['fazenda'],
-                    "talhao": p['talhao'], "municipio": p['municipio'],
-                    "estado": p['estado'], "cultura": p['cultura'],
-                    "area": p['area'], "meta_ton": p['meta_ton'],
-                    "solo": dados_solo_rec,
-                }
-
-                tel_hist = st.text_input(
-                    "Telefone:",
-                    placeholder="11987654321",
-                    key=f"wpp_hist_{id_sel}"
-                )
-
-                msg_hist = gerar_mensagem_whatsapp(
-                    entrada_rec, resultados_rec,
-                    nome_consultor=usuario['nome']
-                )
-                link_hist = gerar_link_whatsapp(tel_hist, msg_hist)
-
-                st.link_button(
-                    "📱 Enviar por WhatsApp",
-                    link_hist,
-                    use_container_width=True,
-                    key=f"wpp_btn_{id_sel}"
-                )
-                st.caption("💡 Baixe o PDF acima e anexe na conversa.")
 
                 if st.button(f"🗑️ Excluir prescrição #{id_sel}"):
                     deletar_prescricao(id_sel, usuario['id'])
