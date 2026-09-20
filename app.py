@@ -260,6 +260,121 @@ def excluir_conta(user_id):
 
 
 # ============================================================
+# PAINEL ADMIN - FUNÇÕES
+# ============================================================
+def admin_listar_usuarios():
+    """Retorna lista completa de usuários com estatísticas."""
+    with get_conn() as conn:
+        rows = conn.execute('''
+            SELECT
+                u.id,
+                u.nome,
+                u.email,
+                u.telefone,
+                u.crea,
+                u.plano,
+                u.ativo,
+                u.criado_em,
+                u.ultimo_acesso,
+                COUNT(p.id) as total_prescricoes,
+                COALESCE(SUM(p.area), 0) as area_total
+            FROM usuarios u
+            LEFT JOIN prescricoes p ON p.user_id = u.id
+            GROUP BY u.id
+            ORDER BY u.criado_em DESC
+        ''').fetchall()
+        return [dict(r) for r in rows]
+
+
+def admin_estatisticas():
+    """Estatísticas gerais do sistema."""
+    with get_conn() as conn:
+        total_users = conn.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0]
+        ativos = conn.execute("SELECT COUNT(*) FROM usuarios WHERE ativo = 1").fetchone()[0]
+        inativos = total_users - ativos
+        total_presc = conn.execute("SELECT COUNT(*) FROM prescricoes").fetchone()[0]
+        area_total = conn.execute("SELECT COALESCE(SUM(area), 0) FROM prescricoes").fetchone()[0]
+        total_clientes = conn.execute("SELECT COUNT(*) FROM clientes").fetchone()[0]
+        total_talhoes = conn.execute("SELECT COUNT(*) FROM talhoes").fetchone()[0]
+
+        # Cadastros nos últimos 30 dias
+        novos_30 = conn.execute('''
+            SELECT COUNT(*) FROM usuarios
+            WHERE criado_em >= datetime('now', '-30 days')
+        ''').fetchone()[0]
+
+        return {
+            "total_users": total_users,
+            "ativos": ativos,
+            "inativos": inativos,
+            "total_presc": total_presc,
+            "area_total": area_total,
+            "total_clientes": total_clientes,
+            "total_talhoes": total_talhoes,
+            "novos_30": novos_30,
+        }
+
+
+def admin_detalhes_usuario(user_id):
+    """Detalhes de um usuário específico."""
+    with get_conn() as conn:
+        user = conn.execute(
+            "SELECT * FROM usuarios WHERE id = ?", (user_id,)
+        ).fetchone()
+
+        clientes = conn.execute(
+            "SELECT COUNT(*) FROM clientes WHERE user_id = ?", (user_id,)
+        ).fetchone()[0]
+
+        talhoes = conn.execute('''
+            SELECT COUNT(*) FROM talhoes
+            WHERE cliente_id IN (SELECT id FROM clientes WHERE user_id = ?)
+        ''', (user_id,)).fetchone()[0]
+
+        prescricoes = conn.execute('''
+            SELECT id, cliente, cultura, area, criado_em
+            FROM prescricoes WHERE user_id = ?
+            ORDER BY criado_em DESC LIMIT 20
+        ''', (user_id,)).fetchall()
+
+        return {
+            "usuario": dict(user) if user else None,
+            "total_clientes": clientes,
+            "total_talhoes": talhoes,
+            "prescricoes": [dict(p) for p in prescricoes],
+        }
+
+
+def admin_toggle_ativo(user_id):
+    """Ativa/desativa um usuário."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT ativo FROM usuarios WHERE id = ?", (user_id,)).fetchone()
+        if row:
+            novo = 0 if row['ativo'] else 1
+            conn.execute("UPDATE usuarios SET ativo = ? WHERE id = ?", (novo, user_id))
+            return novo
+    return None
+
+
+def admin_excluir_usuario(user_id):
+    """Exclui um usuário e todos os seus dados."""
+    excluir_conta(user_id)
+
+
+def admin_logs_recentes(limite=50):
+    """Últimos logs do sistema."""
+    with get_conn() as conn:
+        rows = conn.execute('''
+            SELECT l.id, l.acao, l.detalhes, l.criado_em,
+                   u.nome as usuario_nome, u.email as usuario_email
+            FROM logs l
+            LEFT JOIN usuarios u ON u.id = l.user_id
+            ORDER BY l.criado_em DESC LIMIT ?
+        ''', (limite,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ============================================================
 # CLIENTES E TALHÕES
 # ============================================================
 def criar_cliente(user_id, nome, municipio, estado, contato):
@@ -569,7 +684,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
 
     data_pdf = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
 
-    # Cabeçalho
     pdf.set_fill_color(34, 139, 34)
     pdf.rect(0, 0, 210, 45, 'F')
     pdf.set_text_color(255, 255, 255)
@@ -584,7 +698,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
     pdf.set_text_color(0, 0, 0)
     pdf.ln(15)
 
-    # 1. Informações gerais
     pdf.set_fill_color(230, 230, 230)
     pdf.set_font(fonte, bold, 11)
     pdf.cell(190, 8, " 1. INFORMAÇÕES GERAIS E DIAGNÓSTICO", ln=True, fill=True)
@@ -603,7 +716,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
     pdf.cell(190, 5, f" - P: {solo.get('p_solo', 0)} mg/dm³ ({calc['nivel_p']}) | K: {solo.get('k_solo', 0)} cmolc/dm³ ({calc['nivel_k']})", ln=True)
     pdf.cell(190, 5, f" - Zn: {solo.get('zn_solo', 0):.1f} | B: {solo.get('b_solo', 0):.1f} | Cu: {solo.get('cu_solo', 0):.1f} mg/dm³", ln=True)
 
-    # 2. Justificativa
     pdf.ln(5)
     pdf.set_fill_color(200, 230, 200)
     pdf.set_font(fonte, bold, 10)
@@ -621,7 +733,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
         pdf.multi_cell(190, 5, f" - P2O5: {calc['rec_p']:.0f} kg/ha (nível {calc['nivel_p'].lower()}).")
         pdf.multi_cell(190, 5, f" - K2O: {calc['rec_k']:.0f} kg/ha para reposição.")
 
-    # 3. Prescrição
     pdf.ln(5)
     pdf.set_fill_color(230, 230, 230)
     pdf.set_font(fonte, bold, 11)
@@ -633,7 +744,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
         pdf.cell(190, 7, f" N: {calc['rec_n']:.0f} kg/ha (Plantio: {calc['n_plantio']} | Cobertura: {calc['n_cobertura']:.0f})", ln=True)
     pdf.cell(190, 7, f" P2O5: {calc['rec_p']:.0f} kg/ha | K2O: {calc['rec_k']:.0f} kg/ha", ln=True)
 
-    # 4. Fontes
     pdf.ln(5)
     pdf.set_fill_color(200, 230, 200)
     pdf.set_font(fonte, bold, 10)
@@ -664,7 +774,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
     )
     pdf.cell(190, 5, f" Total de sacos: {total_sacos} sacos", ln=True)
 
-    # 5. Micronutrientes
     pdf.ln(5)
     pdf.set_fill_color(230, 230, 250)
     pdf.set_font(fonte, bold, 10)
@@ -678,7 +787,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
         pdf.multi_cell(190, 5, " - Boro (B): Crítico na floração. Aplicar 0.5-1.0 kg/ha via foliar no início do florescimento.")
     pdf.multi_cell(190, 5, " - Enxofre (S): Essencial para proteínas. Aplicar 20-30 kg/ha de S se necessário.")
 
-    # 6. Cronograma
     pdf.ln(5)
     pdf.set_fill_color(255, 235, 200)
     pdf.set_font(fonte, bold, 10)
@@ -694,7 +802,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
         pdf.cell(190, 5, " Plantio: MAP + KCl (sulco) + inoculação das sementes", ln=True)
         pdf.cell(190, 5, " R1 (início floração): Aplicação foliar de Boro", ln=True)
 
-    # 7. Recomendações
     pdf.ln(5)
     pdf.set_fill_color(255, 220, 220)
     pdf.set_font(fonte, bold, 10)
@@ -710,7 +817,6 @@ def gerar_pdf(entrada, calc, usuario_nome="", usuario_crea=""):
     ]:
         pdf.cell(190, 5, rec, ln=True)
 
-    # 8. Nota
     pdf.ln(5)
     pdf.set_fill_color(255, 235, 235)
     pdf.set_font(fonte, bold, 9)
@@ -771,6 +877,8 @@ data_hoje = (datetime.now() - timedelta(hours=3)).strftime('%d/%m/%Y')
 # ============================================================
 if 'usuario' not in st.session_state:
     st.session_state['usuario'] = None
+if 'admin_autenticado' not in st.session_state:
+    st.session_state['admin_autenticado'] = False
 
 
 def tela_login():
@@ -923,13 +1031,14 @@ with st.sidebar:
 
     pagina = st.radio(
         "📂 Navegação",
-        ["🧮 Nova Prescrição", "📊 Meu Histórico", "👥 Clientes e Talhões", "⚙️ Meu Perfil"]
+        ["🧮 Nova Prescrição", "📊 Meu Histórico", "👥 Clientes e Talhões", "⚙️ Meu Perfil", "👑 Painel Admin"]
     )
 
     st.divider()
     if st.button("🚪 Sair"):
         registrar_log(usuario['id'], "logout", "")
         st.session_state['usuario'] = None
+        st.session_state['admin_autenticado'] = False
         st.rerun()
 
 
@@ -1157,9 +1266,6 @@ if pagina == "🧮 Nova Prescrição":
         else:
             st.info("🌱 Soja: fixação biológica (sem N)")
 
-    # ============================================================
-    # GERAR PDF
-    # ============================================================
     st.divider()
     st.warning("⚠️ Esta ferramenta é um auxílio à decisão. Consulte um engenheiro agrônomo antes da aplicação.")
 
@@ -1386,6 +1492,194 @@ elif pagina == "⚙️ Meu Perfil":
                 st.rerun()
             else:
                 st.error("Digite EXCLUIR para confirmar.")
+
+
+# ============================================================
+# PÁGINA: PAINEL ADMIN
+# ============================================================
+elif pagina == "👑 Painel Admin":
+    st.title("👑 Painel Administrativo")
+
+    # Autenticação do admin
+    if not st.session_state['admin_autenticado']:
+        st.info("🔒 Esta área é restrita ao administrador do sistema.")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            senha_admin = st.text_input("Digite a senha mestra:", type="password", key="admin_senha")
+            if st.button("🔓 Desbloquear Painel", use_container_width=True):
+                if senha_admin == SENHA_MESTRE:
+                    st.session_state['admin_autenticado'] = True
+                    registrar_log(usuario['id'], "admin_acesso", "Painel Admin acessado")
+                    st.rerun()
+                else:
+                    st.error("❌ Senha incorreta.")
+        st.stop()
+
+    # Botão para bloquear novamente
+    col_top1, col_top2 = st.columns([3, 1])
+    with col_top2:
+        if st.button("🔒 Bloquear"):
+            st.session_state['admin_autenticado'] = False
+            st.rerun()
+
+    st.success("✅ Acesso liberado ao Painel Administrativo")
+
+    # ============ MÉTRICAS GERAIS ============
+    stats = admin_estatisticas()
+
+    st.subheader("📊 Visão Geral do Sistema")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("👥 Total de Usuários", stats['total_users'])
+    m2.metric("🟢 Ativos", stats['ativos'])
+    m3.metric("🔴 Inativos", stats['inativos'])
+    m4.metric("🆕 Novos (30 dias)", stats['novos_30'])
+
+    m5, m6, m7, m8 = st.columns(4)
+    m5.metric("📄 Prescrições", stats['total_presc'])
+    m6.metric("📏 Área Total", f"{stats['area_total']:.1f} ha")
+    m7.metric("👨‍🌾 Clientes", stats['total_clientes'])
+    m8.metric("📍 Talhões", stats['total_talhoes'])
+
+    st.divider()
+
+    # ============ TABS ============
+    tab_users, tab_logs = st.tabs(["👥 Usuários Cadastrados", "📋 Logs de Atividade"])
+
+    with tab_users:
+        st.subheader("👥 Lista de Usuários")
+
+        usuarios_lista = admin_listar_usuarios()
+
+        if not usuarios_lista:
+            st.info("Nenhum usuário cadastrado ainda.")
+        else:
+            # Preparar DataFrame
+            df_admin = pd.DataFrame(usuarios_lista)
+            df_display = df_admin[[
+                'id', 'nome', 'email', 'telefone', 'crea',
+                'plano', 'ativo', 'criado_em', 'ultimo_acesso',
+                'total_prescricoes', 'area_total'
+            ]].copy()
+            df_display['ativo'] = df_display['ativo'].apply(lambda x: '🟢 Ativo' if x else '🔴 Inativo')
+            df_display.columns = [
+                'ID', 'Nome', 'E-mail', 'Telefone', 'CREA',
+                'Plano', 'Status', 'Cadastro', 'Último Acesso',
+                'Nº Prescrições', 'Área Total (ha)'
+            ]
+
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+            # Exportar Excel
+            st.divider()
+            st.markdown("### 📥 Exportar Dados")
+            col_exp1, col_exp2 = st.columns(2)
+
+            with col_exp1:
+                csv = df_display.to_csv(index=False).encode('utf-8-sig')
+                st.download_button(
+                    "📄 Baixar CSV",
+                    csv,
+                    file_name=f"usuarios_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+            with col_exp2:
+                try:
+                    buffer = io.BytesIO()
+                    df_display.to_excel(buffer, index=False, engine='openpyxl')
+                    buffer.seek(0)
+                    st.download_button(
+                        "📊 Baixar Excel",
+                        buffer.getvalue(),
+                        file_name=f"usuarios_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                except Exception:
+                    st.caption("(Instale `openpyxl` para exportar Excel)")
+
+            # ============ DETALHES DE UM USUÁRIO ============
+            st.divider()
+            st.subheader("🔍 Detalhes de um Usuário")
+            user_id_sel = st.selectbox(
+                "Selecione o ID do usuário:",
+                [u['id'] for u in usuarios_lista]
+            )
+
+            if user_id_sel:
+                detalhes = admin_detalhes_usuario(user_id_sel)
+                u = detalhes['usuario']
+
+                if u:
+                    col_a, col_b = st.columns([2, 1])
+                    with col_a:
+                        st.markdown(f"**Nome:** {u['nome']}")
+                        st.markdown(f"**E-mail:** {u['email']}")
+                        st.markdown(f"**Telefone:** {u.get('telefone') or '—'}")
+                        st.markdown(f"**CREA:** {u.get('crea') or '—'}")
+                        st.markdown(f"**Plano:** {u['plano'].upper()}")
+                        st.markdown(f"**Status:** {'🟢 Ativo' if u['ativo'] else '🔴 Inativo'}")
+                        st.markdown(f"**Cadastro:** {u['criado_em']}")
+                        st.markdown(f"**Último acesso:** {u.get('ultimo_acesso') or '—'}")
+
+                    with col_b:
+                        st.metric("Clientes", detalhes['total_clientes'])
+                        st.metric("Talhões", detalhes['total_talhoes'])
+                        st.metric("Prescrições", len(detalhes['prescricoes']))
+
+                    # Ações
+                    st.markdown("### ⚙️ Ações")
+                    col_ac1, col_ac2 = st.columns(2)
+
+                    with col_ac1:
+                        if st.button("🔄 Ativar/Desativar conta", key=f"toggle_{user_id_sel}", use_container_width=True):
+                            novo_status = admin_toggle_ativo(user_id_sel)
+                            if novo_status is not None:
+                                acao = "ativado" if novo_status else "desativado"
+                                registrar_log(usuario['id'], "admin_toggle", f"Usuário {user_id_sel} {acao}")
+                                st.success(f"Usuário {'ativado' if novo_status else 'desativado'}!")
+                                st.rerun()
+
+                    with col_ac2:
+                        if st.button("🗑️ Excluir conta", key=f"del_user_{user_id_sel}", use_container_width=True):
+                            st.session_state[f'confirmar_exclusao_{user_id_sel}'] = True
+
+                    # Confirmação de exclusão
+                    if st.session_state.get(f'confirmar_exclusao_{user_id_sel}'):
+                        st.error(f"⚠️ **Tem certeza?** Isso apagará TODOS os dados de **{u['nome']}** permanentemente!")
+                        col_conf1, col_conf2 = st.columns(2)
+                        with col_conf1:
+                            if st.button("✅ Sim, excluir", key=f"conf_del_{user_id_sel}", use_container_width=True):
+                                admin_excluir_usuario(user_id_sel)
+                                registrar_log(usuario['id'], "admin_excluir", f"Usuário {user_id_sel} - {u['email']}")
+                                st.session_state[f'confirmar_exclusao_{user_id_sel}'] = False
+                                st.success("Usuário excluído!")
+                                st.rerun()
+                        with col_conf2:
+                            if st.button("❌ Cancelar", key=f"cancel_del_{user_id_sel}", use_container_width=True):
+                                st.session_state[f'confirmar_exclusao_{user_id_sel}'] = False
+                                st.rerun()
+
+                    # Prescrições do usuário
+                    if detalhes['prescricoes']:
+                        st.markdown("### 📄 Prescrições recentes deste usuário")
+                        df_presc = pd.DataFrame(detalhes['prescricoes'])
+                        df_presc.columns = ['ID', 'Cliente', 'Cultura', 'Área (ha)', 'Data']
+                        st.dataframe(df_presc, use_container_width=True, hide_index=True)
+
+    with tab_logs:
+        st.subheader("📋 Últimas Atividades no Sistema")
+        st.caption("Registros de login, prescrições geradas, clientes cadastrados e outras ações.")
+
+        logs = admin_logs_recentes(limite=100)
+        if not logs:
+            st.info("Nenhuma atividade registrada ainda.")
+        else:
+            df_logs = pd.DataFrame(logs)
+            df_logs = df_logs[['criado_em', 'usuario_nome', 'usuario_email', 'acao', 'detalhes']]
+            df_logs.columns = ['Data/Hora', 'Usuário', 'E-mail', 'Ação', 'Detalhes']
+            st.dataframe(df_logs, use_container_width=True, hide_index=True)
 
 
 st.divider()
